@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(OWNER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Tenant {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  name           String
+  address        String?
+  city           String?
+  phone          String?
+  whatsapp       String?
+  hours          String?
+  logoUrl        String?
+  planId         PlanId
+  trialEndsAt    DateTime?
+  maxTables      Int           @default(0)
+  deliveryAreas  String[]
+  paymentMethods String[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  users        User[]
+  categories   Category[]
+  menuItems    MenuItem[]
+  modifierGroups ModifierGroup[]
+  tables       Table[]
+  subscription Subscription?
+  events       Event[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  icon      String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menuItems MenuItem[]
+
+  @@index([tenantId])
+}
+
+model MenuItem {
+  id           String   @id @default(cuid())
+  tenantId     String
+  categoryId   String
+  name         String
+  description  String?
+  priceCents   Int
+  imageUrl     String?
+  isBestSeller Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  modifierGroupLinks MenuItemModifierGroup[]
+
+  @@index([tenantId])
+  @@index([categoryId])
+}
+
+model Table {
+  id        String      @id @default(cuid())
+  tenantId  String
+  number    Int
+  status    TableStatus @default(AVAILABLE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  tenantId             String   @unique
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  stripePriceId        String?
+  status               SubscriptionStatus
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model ModifierGroup {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  description    String?
+  isRequired     Boolean  @default(false)
+  minSelections  Int      @default(0)
+  maxSelections  Int      @default(1)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  options ModifierOption[]
+  menuItems MenuItemModifierGroup[]
+
+  @@index([tenantId])
+}
+
+model ModifierOption {
+  id              String   @id @default(cuid())
+  modifierGroupId String
+  name            String
+  priceCents      Int      @default(0)
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  modifierGroup ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@index([modifierGroupId])
+}
+
+model MenuItemModifierGroup {
+  id              String   @id @default(cuid())
+  menuItemId      String
+  modifierGroupId String
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  menuItem      MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  modifierGroup ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, modifierGroupId])
+  @@index([menuItemId])
+  @@index([modifierGroupId])
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  tenantId    String
+  type        String
+  source      String?
+  referrer    String?
+  sessionId   String?
+  menuItemId  String?
+  tableNumber Int?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, type])
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+}
+
+enum PlanId {
+  START
+  ESSENCIAL
+  MESA
+  PREMIUM
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+// TODO: Consider adding an optional FK from Event.menuItemId to MenuItem when analytics ingestion is implemented.
