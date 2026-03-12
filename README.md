@@ -31,4 +31,3 @@ npm run build
 
 - se a Vercel apontar para este repositório, use `apps/web` como `Root Directory`
 - se você já tinha processos/scripts apontando para a raiz antiga do backend, passe a usar `apps/api`
-# comanda-flow-api
