@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -22,8 +23,14 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    const ownerName = dto.name.trim();
+    if (!ownerName) {
+      throw new BadRequestException('Name is required.');
+    }
+
+    const email = dto.email.trim().toLowerCase();
     const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
+      where: { email },
     });
 
     if (existingUser) {
@@ -31,8 +38,16 @@ export class AuthService {
     }
 
     const plan = PLAN_FEATURES[dto.planId];
-    const tenantName = dto.tenantName?.trim() || dto.name.trim();
-    const tenantSlug = slugify(dto.tenantSlug?.trim() || tenantName);
+    if (!plan) {
+      throw new BadRequestException('Invalid plan.');
+    }
+
+    const tenantName = dto.tenantName?.trim() || ownerName;
+    const tenantSlug = await this.resolveTenantSlug({
+      tenantName,
+      requestedTenantSlug: dto.tenantSlug?.trim(),
+      email,
+    });
     const passwordHash = await hash(dto.password, 10);
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
@@ -60,8 +75,8 @@ export class AuthService {
       return tx.user.create({
         data: {
           tenantId: tenant.id,
-          name: dto.name.trim(),
-          email: dto.email.toLowerCase(),
+          name: ownerName,
+          email,
           passwordHash,
           role: UserRole.OWNER,
         },
@@ -72,8 +87,9 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    const email = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
+      where: { email },
     });
 
     if (!user) {
@@ -122,5 +138,63 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  private async resolveTenantSlug(input: {
+    tenantName: string;
+    requestedTenantSlug?: string;
+    email: string;
+  }) {
+    const normalizedRequestedSlug = input.requestedTenantSlug
+      ? slugify(input.requestedTenantSlug)
+      : undefined;
+
+    if (input.requestedTenantSlug && !normalizedRequestedSlug) {
+      throw new BadRequestException('Invalid tenant slug.');
+    }
+
+    const baseSlug =
+      normalizedRequestedSlug ||
+      slugify(input.tenantName) ||
+      slugify(input.email.split('@')[0]) ||
+      `tenant-${Date.now()}`;
+
+    if (normalizedRequestedSlug) {
+      const existingTenant = await this.prisma.tenant.findUnique({
+        where: { slug: normalizedRequestedSlug },
+        select: { id: true },
+      });
+
+      if (existingTenant) {
+        throw new ConflictException('This tenant slug is already in use.');
+      }
+
+      return normalizedRequestedSlug;
+    }
+
+    const existingTenantSlugs = await this.prisma.tenant.findMany({
+      where: { slug: { startsWith: baseSlug } },
+      select: { slug: true },
+    });
+
+    return this.buildAvailableSlug(
+      baseSlug,
+      existingTenantSlugs.map(({ slug }) => slug),
+    );
+  }
+
+  private buildAvailableSlug(baseSlug: string, existingSlugs: string[]) {
+    const takenSlugs = new Set(existingSlugs);
+
+    if (!takenSlugs.has(baseSlug)) {
+      return baseSlug;
+    }
+
+    let suffix = 2;
+    while (takenSlugs.has(`${baseSlug}-${suffix}`)) {
+      suffix += 1;
+    }
+
+    return `${baseSlug}-${suffix}`;
   }
 }

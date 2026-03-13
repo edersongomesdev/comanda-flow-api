@@ -1,9 +1,8 @@
 import {
   ArgumentsHost,
   Catch,
-  ConflictException,
   ExceptionFilter,
-  NotFoundException,
+  HttpStatus,
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { Response } from 'express';
@@ -14,17 +13,25 @@ export class PrismaClientExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
 
     if (exception.code === 'P2002') {
-      throw new ConflictException(
-        'A unique constraint would be violated by this operation.',
-      );
+      response.status(HttpStatus.CONFLICT).json({
+        statusCode: HttpStatus.CONFLICT,
+        message: 'A unique constraint would be violated by this operation.',
+        error: 'Conflict',
+      });
+      return;
     }
 
     if (exception.code === 'P2025') {
-      throw new NotFoundException('The requested record was not found.');
+      response.status(HttpStatus.NOT_FOUND).json({
+        statusCode: HttpStatus.NOT_FOUND,
+        message: 'The requested record was not found.',
+        error: 'Not Found',
+      });
+      return;
     }
 
-    response.status(500).json({
-      statusCode: 500,
+    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Unexpected database error.',
       error: 'Internal Server Error',
     });

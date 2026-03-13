@@ -15,10 +15,17 @@ import {
 
 export class RegisterDto {
   @ApiProperty({ example: 'Carlos Silva' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @MinLength(1)
   name!: string;
 
   @ApiProperty({ example: 'carlos@generalburguer.com' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsEmail()
   email!: string;
 
@@ -36,11 +43,19 @@ export class RegisterDto {
 
   @ApiPropertyOptional({ example: 'General Burguer' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @MinLength(1)
   tenantName?: string;
 
   @ApiPropertyOptional({ example: 'general-burguer' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @MinLength(1)
   tenantSlug?: string;
 }
