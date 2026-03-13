@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
 import { useAuth } from "@/state/auth-context";
+import { useToast } from "@/hooks/use-toast";
 import { mockPlans } from "@/data/mock";
 import type { PlanId } from "@/types";
 import { motion } from "framer-motion";
@@ -16,6 +17,7 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") === "signup" ? "signup" : "login";
   const { login, signup, isLoading } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const [loginForm, setLoginForm] = useState({ email: "carlos@generalburguer.com", password: "demo123" });
@@ -28,14 +30,30 @@ export default function Auth() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    await login(loginForm.email, loginForm.password);
-    navigate("/dashboard");
+    try {
+      await login(loginForm.email, loginForm.password);
+      navigate("/dashboard");
+    } catch (error) {
+      toast({
+        title: "Nao foi possivel entrar",
+        description: error instanceof Error ? error.message : "Falha inesperada ao autenticar.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    await signup(signupForm);
-    navigate("/dashboard");
+    try {
+      await signup(signupForm);
+      navigate("/dashboard");
+    } catch (error) {
+      toast({
+        title: "Nao foi possivel criar a conta",
+        description: error instanceof Error ? error.message : "Falha inesperada ao criar a conta.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -84,7 +102,9 @@ export default function Auth() {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Entrando..." : "Entrar"}
                 </Button>
-                <p className="text-xs text-center text-muted-foreground">Dados demo já preenchidos para teste.</p>
+                <p className="text-xs text-center text-muted-foreground">
+                  Se a API recusar o login, o motivo agora aparece em tela.
+                </p>
               </form>
             </TabsContent>
 
