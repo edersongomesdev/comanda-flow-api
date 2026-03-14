@@ -33,16 +33,21 @@ function enumSql(value: string, enumName: string): string {
 }
 
 function generateInitSql(): string {
-  const prismaBinary = path.join(
-    rootDir,
-    'node_modules',
-    '.bin',
-    process.platform === 'win32' ? 'prisma.cmd' : 'prisma',
-  );
+  const prismaCliEntrypoint = require.resolve('prisma/build/index.js', {
+    paths: [rootDir],
+  });
   const schemaPath = path.join(rootDir, 'prisma', 'schema.prisma');
   const diffOutput = execFileSync(
-    prismaBinary,
-    ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', schemaPath, '--script'],
+    process.execPath,
+    [
+      prismaCliEntrypoint,
+      'migrate',
+      'diff',
+      '--from-empty',
+      '--to-schema-datamodel',
+      schemaPath,
+      '--script',
+    ],
     {
       cwd: rootDir,
       encoding: 'utf8',
@@ -50,15 +55,22 @@ function generateInitSql(): string {
   )
     .replace(/\r\n/g, '\n')
     .trim();
+  const supplementalSql = [
+    '-- AddForeignKey',
+    'ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_id_fkey" FOREIGN KEY ("id") REFERENCES auth.users("id") ON DELETE CASCADE ON UPDATE CASCADE;',
+  ].join('\n');
 
   return [
     '-- Comanda Flow',
     '-- Generated from prisma/schema.prisma as an empty-database baseline.',
+    '-- Includes supplemental SQL for objects Prisma cannot model directly, such as auth.users FKs.',
     '-- Do not edit manually; run `npm run prisma:sql:generate`.',
     '',
     'BEGIN;',
     '',
     diffOutput,
+    '',
+    supplementalSql,
     '',
     'COMMIT;',
     '',
@@ -148,6 +160,8 @@ DO UPDATE SET
   return `-- Comanda Flow
 -- Generated from prisma/seed-data.ts to match prisma/seed.ts.
 -- Owner login: ${owner.email} / ${owner.password}
+-- Note: this seed provisions the legacy "User" table only.
+-- For Supabase Auth flows, create auth.users and public.user_profiles separately.
 
 BEGIN;
 

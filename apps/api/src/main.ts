@@ -6,6 +6,49 @@ import { AppModule } from './app.module';
 import { PrismaClientExceptionFilter } from './common/filters/prisma-client-exception.filter';
 import { PrismaService } from './prisma/prisma.service';
 
+function normalizeOrigin(origin: string) {
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseCommaSeparatedValues(value?: string) {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function isAllowedVercelOrigin(origin: string, projectNames: string[]) {
+  try {
+    const { hostname, protocol } = new URL(origin);
+
+    if (protocol !== 'https:' || !hostname.endsWith('.vercel.app')) {
+      return false;
+    }
+
+    const deploymentName = hostname.slice(0, -'.vercel.app'.length);
+    const normalizedDeploymentName = deploymentName.toLowerCase();
+
+    return projectNames.some((projectName) => {
+      const normalizedProjectName = projectName.toLowerCase();
+
+      return (
+        normalizedDeploymentName === normalizedProjectName ||
+        normalizedDeploymentName.startsWith(`${normalizedProjectName}-`)
+      );
+    });
+  } catch {
+    return false;
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
@@ -16,22 +59,49 @@ async function bootstrap() {
     'FRONTEND_URL',
     'http://localhost:4173',
   );
+  const frontendUrls = parseCommaSeparatedValues(
+    configService.get<string>('FRONTEND_URLS'),
+  );
+  const vercelFrontendProjects = parseCommaSeparatedValues(
+    configService.get<string>('FRONTEND_VERCEL_PROJECTS'),
+  );
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-  const allowedOrigins = new Set([
-    'http://localhost:4173',
-    'http://127.0.0.1:4173',
-    'https://comandaflow.techmarque.com.br',
-    frontendUrl,
-  ]);
+  const allowedOrigins = new Set(
+    [
+      'http://localhost:4173',
+      'http://127.0.0.1:4173',
+      'https://comandaflow.techmarque.com.br',
+      frontendUrl,
+      ...frontendUrls,
+    ]
+      .map((origin) => normalizeOrigin(origin))
+      .filter((origin): origin is string => Boolean(origin)),
+  );
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin)) {
+      if (!origin) {
         callback(null, true);
         return;
       }
 
-      callback(new Error(`CORS blocked for origin: ${origin}`));
+      const normalizedOrigin = normalizeOrigin(origin);
+      const originIsAllowed =
+        Boolean(normalizedOrigin && allowedOrigins.has(normalizedOrigin)) ||
+        (normalizedOrigin
+          ? isAllowedVercelOrigin(normalizedOrigin, vercelFrontendProjects)
+          : false);
+
+      if (originIsAllowed) {
+        callback(null, true);
+        return;
+      }
+
+      callback(
+        new Error(
+          `CORS blocked for origin: ${origin}. Configure FRONTEND_URL, FRONTEND_URLS or FRONTEND_VERCEL_PROJECTS accordingly.`,
+        ),
+      );
     },
     credentials: true,
   });

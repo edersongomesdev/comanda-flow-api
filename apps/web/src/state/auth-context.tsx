@@ -1,8 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { signup as signupRequest, getCurrentUser, login as loginRequest } from "@/services/api";
 import type { PlanId, User } from "@/types";
-import { getCurrentUser, login as loginRequest, signup as signupRequest } from "@/services/api";
 import { AUTH_TOKEN_STORAGE_KEY, HttpError, getActiveAccessToken } from "@/services/http";
-import { signOutSupabaseSession, subscribeToSupabaseAuth } from "@/services/supabase";
+import {
+  signInWithSupabasePassword,
+  signOutSupabaseSession,
+  subscribeToSupabaseAuth,
+} from "@/services/supabase";
 
 interface AuthContextType {
   user: User | null;
@@ -49,6 +53,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  }, []);
+
+  const clearLegacySession = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   }, []);
 
@@ -132,54 +144,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const legacyToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
-      if (legacyToken) {
+      if (session?.access_token) {
+        clearLegacySession();
+
+        void getCurrentUser()
+          .then((nextUser) => {
+            persistUser(nextUser);
+          })
+          .catch(() => {
+            clearStoredSession();
+          });
         return;
       }
 
-      if (!session?.access_token) {
+      if (!legacyToken) {
         clearStoredSession();
-        return;
       }
-
-      void getCurrentUser()
-        .then((nextUser) => {
-          persistUser(nextUser);
-        })
-        .catch(() => {
-          clearStoredSession();
-        });
     });
 
     return () => {
       isMounted = false;
       unsubscribe();
     };
-  }, [clearStoredSession, persistUser]);
+  }, [clearLegacySession, clearStoredSession, persistUser]);
 
   const login = useCallback(
     async (email: string, password: string) => {
       setIsLoading(true);
       try {
+        await signInWithSupabasePassword(email, password);
+        clearLegacySession();
+        const nextUser = await getCurrentUser();
+        persistUser(nextUser);
+      } catch (supabaseError) {
+        await signOutSupabaseSession();
+
         const session = await loginRequest(email, password);
         persistLegacySession(session.accessToken, session.user);
       } finally {
         setIsLoading(false);
       }
     },
-    [persistLegacySession],
+    [clearLegacySession, persistLegacySession, persistUser],
   );
 
   const signup = useCallback(
     async (data: { name: string; email: string; password: string; planId: PlanId }) => {
       setIsLoading(true);
       try {
-        const session = await signupRequest(data);
-        persistLegacySession(session.accessToken, session.user);
+        const legacySession = await signupRequest(data);
+
+        try {
+          await signInWithSupabasePassword(data.email, data.password);
+          clearLegacySession();
+          const nextUser = await getCurrentUser();
+          persistUser(nextUser);
+        } catch (supabaseError) {
+          persistLegacySession(legacySession.accessToken, legacySession.user);
+          throw supabaseError;
+        }
       } finally {
         setIsLoading(false);
       }
     },
-    [persistLegacySession],
+    [clearLegacySession, persistLegacySession, persistUser],
   );
 
   const logout = useCallback(() => {

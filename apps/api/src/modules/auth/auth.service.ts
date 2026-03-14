@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -18,6 +19,8 @@ import { SupabaseAuthService } from './supabase-auth.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -54,14 +57,24 @@ export class AuthService {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-    const authUser = await this.supabaseAuthService.createUser({
-      email,
-      password: dto.password,
-      name: ownerName,
-      role: UserRole.OWNER,
-      tenantName,
-      tenantSlug,
-    });
+    const shouldProvisionSupabaseUser =
+      this.supabaseAuthService.isAdminConfigured();
+    const authUser = shouldProvisionSupabaseUser
+      ? await this.supabaseAuthService.createUser({
+          email,
+          password: dto.password,
+          name: ownerName,
+          role: UserRole.OWNER,
+          tenantName,
+          tenantSlug,
+        })
+      : null;
+
+    if (!shouldProvisionSupabaseUser) {
+      this.logger.warn(
+        'Supabase Admin API is not configured. Registering a legacy-only account until the migration environment is complete.',
+      );
+    }
 
     try {
       const user = await this.prisma.$transaction(async (tx) => {
@@ -84,14 +97,16 @@ export class AuthService {
           },
         });
 
-        await tx.userProfile.create({
-          data: {
-            id: authUser.id,
-            tenantId: tenant.id,
-            name: ownerName,
-            role: UserRole.OWNER,
-          },
-        });
+        if (authUser) {
+          await tx.userProfile.create({
+            data: {
+              id: authUser.id,
+              tenantId: tenant.id,
+              name: ownerName,
+              role: UserRole.OWNER,
+            },
+          });
+        }
 
         return tx.user.create({
           data: {
@@ -106,7 +121,9 @@ export class AuthService {
 
       return this.buildAuthResponse(user);
     } catch (error) {
-      await this.supabaseAuthService.deleteUser(authUser.id);
+      if (authUser) {
+        await this.supabaseAuthService.deleteUser(authUser.id);
+      }
       throw error;
     }
   }

@@ -1,6 +1,8 @@
 -- Comanda Flow
 -- Generated from prisma/seed-data.ts to match prisma/seed.ts.
 -- Owner login: carlos@generalburguer.com / demo123
+-- Note: this seed provisions the legacy "User" table only.
+-- For Supabase Auth flows, create auth.users and public.user_profiles separately.
 
 BEGIN;
 

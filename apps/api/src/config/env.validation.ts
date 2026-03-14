@@ -6,6 +6,8 @@ export interface EnvVariables {
   PORT: number;
   NODE_ENV: NodeEnv;
   FRONTEND_URL: string;
+  FRONTEND_URLS?: string;
+  FRONTEND_VERCEL_PROJECTS?: string;
   DATABASE_URL: string;
   DIRECT_URL: string;
   JWT_SECRET: string;
@@ -56,6 +58,11 @@ export function validateEnv(env: EnvInput): EnvVariables {
     PORT: port,
     NODE_ENV: nodeEnv,
     FRONTEND_URL: env.FRONTEND_URL ?? 'http://localhost:4173',
+    FRONTEND_URLS: readOptionalString(env, 'FRONTEND_URLS'),
+    FRONTEND_VERCEL_PROJECTS: readOptionalString(
+      env,
+      'FRONTEND_VERCEL_PROJECTS',
+    ),
     DATABASE_URL: readRequiredString(env, 'DATABASE_URL'),
     DIRECT_URL: readRequiredString(env, 'DIRECT_URL'),
     JWT_SECRET: readRequiredString(env, 'JWT_SECRET'),

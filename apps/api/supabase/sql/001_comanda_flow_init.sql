@@ -1,5 +1,6 @@
 -- Comanda Flow
 -- Generated from prisma/schema.prisma as an empty-database baseline.
+-- Includes supplemental SQL for objects Prisma cannot model directly, such as auth.users FKs.
 -- Do not edit manually; run `npm run prisma:sql:generate`.
 
 BEGIN;
@@ -28,6 +29,18 @@ CREATE TABLE "User" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user_profiles" (
+    "id" UUID NOT NULL,
+    "tenant_id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "role" "UserRole" NOT NULL DEFAULT 'OWNER',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "user_profiles_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -173,6 +186,9 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE INDEX "User_tenantId_idx" ON "User"("tenantId");
 
 -- CreateIndex
+CREATE INDEX "user_profiles_tenant_id_idx" ON "user_profiles"("tenant_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Tenant_slug_key" ON "Tenant"("slug");
 
 -- CreateIndex
@@ -224,6 +240,9 @@ CREATE INDEX "Event_tenantId_type_idx" ON "Event"("tenantId", "type");
 ALTER TABLE "User" ADD CONSTRAINT "User_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Category" ADD CONSTRAINT "Category_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -252,5 +271,8 @@ ALTER TABLE "MenuItemModifierGroup" ADD CONSTRAINT "MenuItemModifierGroup_modifi
 
 -- AddForeignKey
 ALTER TABLE "Event" ADD CONSTRAINT "Event_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_id_fkey" FOREIGN KEY ("id") REFERENCES auth.users("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 COMMIT;

@@ -8,6 +8,8 @@ import { CartProvider } from "@/state/cart-context";
 import { TenantProvider } from "@/state/tenant-context";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import MenuAdmin from "./pages/MenuAdmin";
 import PublicMenu from "./pages/PublicMenu";
@@ -34,6 +36,8 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+                <Route path="/auth/reset-password" element={<ResetPassword />} />
                 <Route path="/m/:slug/menu" element={<PublicMenu />} />
                 <Route path="/m/:slug/menu/:mesa" element={<PublicMenu />} />
                 <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

@@ -25,13 +25,13 @@ function getStoredLegacyToken() {
 }
 
 export async function getActiveAccessToken() {
-  const legacyToken = getStoredLegacyToken();
+  const supabaseToken = await getSupabaseAccessToken();
 
-  if (legacyToken) {
-    return legacyToken;
+  if (supabaseToken) {
+    return supabaseToken;
   }
 
-  return getSupabaseAccessToken();
+  return getStoredLegacyToken();
 }
 
 function buildUrl(path: string) {

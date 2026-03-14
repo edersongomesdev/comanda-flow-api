@@ -102,8 +102,14 @@ export default function Auth() {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Entrando..." : "Entrar"}
                 </Button>
+                <Link
+                  to="/auth/forgot-password"
+                  className="block text-center text-sm text-primary transition-colors hover:text-primary/80"
+                >
+                  Esqueci minha senha
+                </Link>
                 <p className="text-xs text-center text-muted-foreground">
-                  Se a API recusar o login, o motivo agora aparece em tela.
+                  O login agora tenta primeiro o Supabase e cai para o legado so enquanto houver contas antigas sem migracao.
                 </p>
               </form>
             </TabsContent>

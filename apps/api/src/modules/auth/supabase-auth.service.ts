@@ -31,6 +31,13 @@ export class SupabaseAuthService {
 
   constructor(private readonly configService: ConfigService) {}
 
+  isAdminConfigured() {
+    return Boolean(
+      this.getSupabaseUrl() &&
+        this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim(),
+    );
+  }
+
   isAuthVerificationConfigured() {
     return Boolean(this.getSupabaseUrl() && this.getSupabaseApiKey());
   }

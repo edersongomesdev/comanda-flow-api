@@ -33,12 +33,14 @@ describe('AuthService', () => {
     sign: jest.fn(),
   };
   const supabaseAuthService = {
+    isAdminConfigured: jest.fn(),
     createUser: jest.fn(),
     deleteUser: jest.fn(),
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    supabaseAuthService.isAdminConfigured.mockReturnValue(true);
     service = new AuthService(
       prisma as never,
       jwtService as unknown as JwtService,
@@ -149,5 +151,47 @@ describe('AuthService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('falls back to legacy registration when Supabase Admin is not configured', async () => {
+    supabaseAuthService.isAdminConfigured.mockReturnValue(false);
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.tenant.findMany.mockResolvedValue([]);
+    prisma.tenant.create.mockResolvedValue({
+      id: 'tenant_123',
+    });
+    prisma.subscription.create.mockResolvedValue({
+      id: 'subscription_123',
+    });
+    prisma.user.create.mockResolvedValue({
+      id: 'user_123',
+      tenantId: 'tenant_123',
+      name: 'Carlos Silva',
+      email: 'carlos@example.com',
+      role: UserRole.OWNER,
+    });
+    jwtService.sign.mockReturnValue('token_123');
+
+    await expect(
+      service.register({
+        name: 'Carlos Silva',
+        email: 'carlos@example.com',
+        password: 'demo123',
+        planId: 'MESA',
+      }),
+    ).resolves.toEqual({
+      accessToken: 'token_123',
+      user: {
+        id: 'user_123',
+        tenantId: 'tenant_123',
+        name: 'Carlos Silva',
+        email: 'carlos@example.com',
+        role: UserRole.OWNER,
+      },
+    });
+
+    expect(supabaseAuthService.createUser).not.toHaveBeenCalled();
+    expect(prisma.userProfile.create).not.toHaveBeenCalled();
+    expect(supabaseAuthService.deleteUser).not.toHaveBeenCalled();
   });
 });
