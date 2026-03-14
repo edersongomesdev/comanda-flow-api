@@ -3,4 +3,5 @@ export interface CurrentUserData {
   tenantId: string;
   email: string;
   role: 'OWNER' | 'ADMIN';
+  authProvider: 'legacy' | 'supabase';
 }

@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { PlanId, User } from "@/types";
 import { getCurrentUser, login as loginRequest, signup as signupRequest } from "@/services/api";
-import { AUTH_TOKEN_STORAGE_KEY, HttpError } from "@/services/http";
+import { AUTH_TOKEN_STORAGE_KEY, HttpError, getActiveAccessToken } from "@/services/http";
+import { signOutSupabaseSession, subscribeToSupabaseAuth } from "@/services/supabase";
 
 interface AuthContextType {
   user: User | null;
@@ -40,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
-  const clearSession = useCallback(() => {
+  const clearStoredSession = useCallback(() => {
     setUser(null);
 
     if (typeof window === "undefined") {
@@ -51,73 +52,121 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   }, []);
 
-  const persistSession = useCallback((accessToken: string, nextUser: User) => {
+  const persistUser = useCallback((nextUser: User) => {
     setUser(nextUser);
 
     if (typeof window === "undefined") {
       return;
     }
 
-    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, accessToken);
     window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextUser));
   }, []);
 
+  const persistLegacySession = useCallback(
+    (accessToken: string, nextUser: User) => {
+      persistUser(nextUser);
+
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, accessToken);
+    },
+    [persistUser],
+  );
+
   useEffect(() => {
-    if (typeof window === "undefined") {
-      setLoading(false);
-      return;
+    let isMounted = true;
+
+    async function hydrateSession() {
+      if (typeof window === "undefined") {
+        if (isMounted) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      const token = await getActiveAccessToken();
+
+      if (!token) {
+        if (isMounted) {
+          clearStoredSession();
+          setLoading(false);
+        }
+        return;
+      }
+
+      const storedUser = readStoredUser();
+
+      if (storedUser && isMounted) {
+        setUser(storedUser);
+        setLoading(false);
+      }
+
+      try {
+        const nextUser = await getCurrentUser();
+
+        if (isMounted) {
+          persistUser(nextUser);
+        }
+      } catch (error) {
+        if (
+          isMounted &&
+          (!(error instanceof HttpError) || error.status === 401)
+        ) {
+          clearStoredSession();
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
     }
 
-    const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+    void hydrateSession();
 
-    if (!token) {
-      clearSession();
-      setLoading(false);
-      return;
-    }
+    const unsubscribe = subscribeToSupabaseAuth((_event, session) => {
+      if (typeof window === "undefined") {
+        return;
+      }
 
-    const storedUser = readStoredUser();
+      const legacyToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
-    if (storedUser) {
-      setUser(storedUser);
-      setLoading(false);
+      if (legacyToken) {
+        return;
+      }
+
+      if (!session?.access_token) {
+        clearStoredSession();
+        return;
+      }
 
       void getCurrentUser()
         .then((nextUser) => {
-          persistSession(token, nextUser);
+          persistUser(nextUser);
         })
-        .catch((error: unknown) => {
-          if (error instanceof HttpError && error.status === 401) {
-            clearSession();
-          }
+        .catch(() => {
+          clearStoredSession();
         });
+    });
 
-      return;
-    }
-
-    void getCurrentUser()
-      .then((nextUser) => {
-        persistSession(token, nextUser);
-      })
-      .catch(() => {
-        clearSession();
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [clearSession, persistSession]);
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [clearStoredSession, persistUser]);
 
   const login = useCallback(
     async (email: string, password: string) => {
       setIsLoading(true);
       try {
         const session = await loginRequest(email, password);
-        persistSession(session.accessToken, session.user);
+        persistLegacySession(session.accessToken, session.user);
       } finally {
         setIsLoading(false);
       }
     },
-    [persistSession],
+    [persistLegacySession],
   );
 
   const signup = useCallback(
@@ -125,17 +174,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       try {
         const session = await signupRequest(data);
-        persistSession(session.accessToken, session.user);
+        persistLegacySession(session.accessToken, session.user);
       } finally {
         setIsLoading(false);
       }
     },
-    [persistSession],
+    [persistLegacySession],
   );
 
   const logout = useCallback(() => {
-    clearSession();
-  }, [clearSession]);
+    clearStoredSession();
+    void signOutSupabaseSession();
+  }, [clearStoredSession]);
 
   return (
     <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, isLoading, login, signup, logout }}>

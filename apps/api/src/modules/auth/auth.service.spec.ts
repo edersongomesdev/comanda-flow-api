@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
+import { SupabaseAuthService } from './supabase-auth.service';
 
 jest.mock('bcryptjs', () => ({
   compare: jest.fn(),
@@ -13,6 +14,9 @@ describe('AuthService', () => {
   const prisma = {
     user: {
       findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    userProfile: {
       create: jest.fn(),
     },
     tenant: {
@@ -28,18 +32,24 @@ describe('AuthService', () => {
   const jwtService = {
     sign: jest.fn(),
   };
+  const supabaseAuthService = {
+    createUser: jest.fn(),
+    deleteUser: jest.fn(),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
     service = new AuthService(
       prisma as never,
       jwtService as unknown as JwtService,
+      supabaseAuthService as unknown as SupabaseAuthService,
     );
     prisma.$transaction.mockImplementation(
       async (
         callback: (tx: {
           tenant: { create: typeof prisma.tenant.create };
           subscription: { create: typeof prisma.subscription.create };
+          userProfile: { create: typeof prisma.userProfile.create };
           user: { create: typeof prisma.user.create };
         }) => Promise<unknown>,
       ) =>
@@ -49,6 +59,9 @@ describe('AuthService', () => {
           },
           subscription: {
             create: prisma.subscription.create,
+          },
+          userProfile: {
+            create: prisma.userProfile.create,
           },
           user: {
             create: prisma.user.create,
@@ -69,12 +82,18 @@ describe('AuthService', () => {
     prisma.subscription.create.mockResolvedValue({
       id: 'subscription_123',
     });
+    prisma.userProfile.create.mockResolvedValue({
+      id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
+    });
     prisma.user.create.mockResolvedValue({
       id: 'user_123',
       tenantId: 'tenant_123',
       name: 'Carlos Silva',
       email: 'carlos@example.com',
       role: UserRole.OWNER,
+    });
+    supabaseAuthService.createUser.mockResolvedValue({
+      id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
     });
     jwtService.sign.mockReturnValue('token_123');
 
@@ -114,6 +133,9 @@ describe('AuthService', () => {
     prisma.user.findUnique.mockResolvedValue(null);
     prisma.tenant.findUnique.mockResolvedValue({
       id: 'tenant_existing',
+    });
+    supabaseAuthService.createUser.mockResolvedValue({
+      id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
     });
 
     await expect(

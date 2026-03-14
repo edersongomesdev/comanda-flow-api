@@ -14,12 +14,14 @@ import { slugify } from '../../common/utils/slugify';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { SupabaseAuthService } from './supabase-auth.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly supabaseAuthService: SupabaseAuthService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -52,38 +54,61 @@ export class AuthService {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const tenant = await tx.tenant.create({
-        data: {
-          slug: tenantSlug,
-          name: tenantName,
-          planId: dto.planId,
-          maxTables: plan.maxTables,
-          trialEndsAt,
-          deliveryAreas: [],
-          paymentMethods: [],
-        },
-      });
-
-      await tx.subscription.create({
-        data: {
-          tenantId: tenant.id,
-          status: SubscriptionStatus.TRIALING,
-        },
-      });
-
-      return tx.user.create({
-        data: {
-          tenantId: tenant.id,
-          name: ownerName,
-          email,
-          passwordHash,
-          role: UserRole.OWNER,
-        },
-      });
+    const authUser = await this.supabaseAuthService.createUser({
+      email,
+      password: dto.password,
+      name: ownerName,
+      role: UserRole.OWNER,
+      tenantName,
+      tenantSlug,
     });
 
-    return this.buildAuthResponse(user);
+    try {
+      const user = await this.prisma.$transaction(async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: {
+            slug: tenantSlug,
+            name: tenantName,
+            planId: dto.planId,
+            maxTables: plan.maxTables,
+            trialEndsAt,
+            deliveryAreas: [],
+            paymentMethods: [],
+          },
+        });
+
+        await tx.subscription.create({
+          data: {
+            tenantId: tenant.id,
+            status: SubscriptionStatus.TRIALING,
+          },
+        });
+
+        await tx.userProfile.create({
+          data: {
+            id: authUser.id,
+            tenantId: tenant.id,
+            name: ownerName,
+            role: UserRole.OWNER,
+          },
+        });
+
+        return tx.user.create({
+          data: {
+            tenantId: tenant.id,
+            name: ownerName,
+            email,
+            passwordHash,
+            role: UserRole.OWNER,
+          },
+        });
+      });
+
+      return this.buildAuthResponse(user);
+    } catch (error) {
+      await this.supabaseAuthService.deleteUser(authUser.id);
+      throw error;
+    }
   }
 
   async login(dto: LoginDto) {
@@ -105,6 +130,31 @@ export class AuthService {
   }
 
   async getMe(currentUser: CurrentUserData) {
+    if (currentUser.authProvider === 'supabase') {
+      const profile = await this.prisma.userProfile.findUnique({
+        where: { id: currentUser.userId },
+        select: {
+          id: true,
+          tenantId: true,
+          name: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!profile) {
+        throw new UnauthorizedException(
+          'Authenticated Supabase user profile was not found.',
+        );
+      }
+
+      return {
+        ...profile,
+        email: currentUser.email,
+      };
+    }
+
     return this.prisma.user.findUniqueOrThrow({
       where: { id: currentUser.userId },
       select: {
@@ -126,6 +176,7 @@ export class AuthService {
       tenantId: user.tenantId,
       email: user.email,
       role: user.role,
+      authProvider: 'legacy',
     };
 
     return {

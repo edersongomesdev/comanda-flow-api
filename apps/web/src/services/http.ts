@@ -1,3 +1,5 @@
+import { getSupabaseAccessToken } from "@/services/supabase";
+
 export const AUTH_TOKEN_STORAGE_KEY = "comanda-flow.auth-token";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3001").replace(/\/+$/, "");
@@ -14,12 +16,22 @@ export class HttpError extends Error {
   }
 }
 
-function getStoredToken() {
+function getStoredLegacyToken() {
   if (typeof window === "undefined") {
     return null;
   }
 
   return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+export async function getActiveAccessToken() {
+  const legacyToken = getStoredLegacyToken();
+
+  if (legacyToken) {
+    return legacyToken;
+  }
+
+  return getSupabaseAccessToken();
 }
 
 function buildUrl(path: string) {
@@ -66,7 +78,7 @@ function normalizeErrorMessage(data: unknown, status: number) {
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getStoredToken();
+  const token = await getActiveAccessToken();
   const headers = new Headers(init.headers);
 
   if (!headers.has("Accept")) {

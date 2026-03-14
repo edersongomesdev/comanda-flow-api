@@ -23,6 +23,20 @@ model User {
   @@index([tenantId])
 }
 
+model UserProfile {
+  id        String   @id @db.Uuid
+  tenantId  String   @map("tenant_id")
+  name      String
+  role      UserRole @default(OWNER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("user_profiles")
+}
+
 model Tenant {
   id             String        @id @default(cuid())
   slug           String        @unique
@@ -42,6 +56,7 @@ model Tenant {
   updatedAt      DateTime      @updatedAt
 
   users        User[]
+  userProfiles UserProfile[]
   categories   Category[]
   menuItems    MenuItem[]
   modifierGroups ModifierGroup[]
