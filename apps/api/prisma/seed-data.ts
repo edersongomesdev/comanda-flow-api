@@ -1,4 +1,4 @@
-import { PlanId, SubscriptionStatus, TableStatus, UserRole } from '@prisma/client';
+import { PlanId, SubscriptionStatus, TableStatus } from '@prisma/client';
 
 export const demoSeed = {
   trialDays: 14,
@@ -16,14 +16,6 @@ export const demoSeed = {
     maxTables: 15,
     deliveryAreas: ['Centro', 'Jardins', 'Pinheiros'],
     paymentMethods: ['Pix', 'Credito', 'Debito'],
-  },
-  owner: {
-    id: 'clseedusercarlos0000000001',
-    name: 'Carlos Silva',
-    email: 'carlos@generalburguer.com',
-    password: 'demo123',
-    passwordHash: '$2a$10$hpv/UmNB4T4EfuQjO93Ml.zOdFqQ9fzJ0lO7o7b6zerzgiffJ2HPi',
-    role: UserRole.OWNER,
   },
   subscription: {
     id: 'clseedsubscription000000001',

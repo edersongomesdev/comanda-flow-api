@@ -2,28 +2,21 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { SubscriptionStatus, User, UserRole } from '@prisma/client';
-import { compare, hash } from 'bcryptjs';
+import { SubscriptionStatus, UserRole } from '@prisma/client';
 import { CurrentUserData } from '../../common/types/current-user.type';
-import { JwtPayload } from '../../common/types/jwt-payload.type';
 import { PLAN_FEATURES } from '../../common/utils/plan-features';
 import { slugify } from '../../common/utils/slugify';
 import { PrismaService } from '../../prisma/prisma.service';
-import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { SupabaseAuthService } from './supabase-auth.service';
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly jwtService: JwtService,
     private readonly supabaseAuthService: SupabaseAuthService,
   ) {}
 
@@ -34,17 +27,15 @@ export class AuthService {
     }
 
     const email = dto.email.trim().toLowerCase();
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('An account with this email already exists.');
-    }
-
     const plan = PLAN_FEATURES[dto.planId];
     if (!plan) {
       throw new BadRequestException('Invalid plan.');
+    }
+
+    if (!this.supabaseAuthService.isAdminConfigured()) {
+      throw new ServiceUnavailableException(
+        'User registration is unavailable until SUPABASE_SERVICE_ROLE_KEY is configured.',
+      );
     }
 
     const tenantName = dto.tenantName?.trim() || ownerName;
@@ -53,31 +44,20 @@ export class AuthService {
       requestedTenantSlug: dto.tenantSlug?.trim(),
       email,
     });
-    const passwordHash = await hash(dto.password, 10);
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
-    const shouldProvisionSupabaseUser =
-      this.supabaseAuthService.isAdminConfigured();
-    const authUser = shouldProvisionSupabaseUser
-      ? await this.supabaseAuthService.createUser({
-          email,
-          password: dto.password,
-          name: ownerName,
-          role: UserRole.OWNER,
-          tenantName,
-          tenantSlug,
-        })
-      : null;
-
-    if (!shouldProvisionSupabaseUser) {
-      this.logger.warn(
-        'Supabase Admin API is not configured. Registering a legacy-only account until the migration environment is complete.',
-      );
-    }
+    const authUser = await this.supabaseAuthService.createUser({
+      email,
+      password: dto.password,
+      name: ownerName,
+      role: UserRole.OWNER,
+      tenantName,
+      tenantSlug,
+    });
 
     try {
-      const user = await this.prisma.$transaction(async (tx) => {
+      const createdAccount = await this.prisma.$transaction(async (tx) => {
         const tenant = await tx.tenant.create({
           data: {
             slug: tenantSlug,
@@ -97,114 +77,70 @@ export class AuthService {
           },
         });
 
-        if (authUser) {
-          await tx.userProfile.create({
-            data: {
-              id: authUser.id,
-              tenantId: tenant.id,
-              name: ownerName,
-              role: UserRole.OWNER,
-            },
-          });
-        }
-
-        return tx.user.create({
+        const userProfile = await tx.userProfile.create({
           data: {
+            id: authUser.id,
             tenantId: tenant.id,
             name: ownerName,
-            email,
-            passwordHash,
             role: UserRole.OWNER,
           },
         });
+
+        return {
+          tenant,
+          userProfile,
+        };
       });
 
-      return this.buildAuthResponse(user);
+      return {
+        authProvider: 'supabase' as const,
+        user: {
+          id: createdAccount.userProfile.id,
+          tenantId: createdAccount.userProfile.tenantId,
+          name: createdAccount.userProfile.name,
+          email,
+          role: createdAccount.userProfile.role,
+        },
+        tenant: {
+          id: createdAccount.tenant.id,
+          slug: createdAccount.tenant.slug,
+          name: createdAccount.tenant.name,
+          planId: createdAccount.tenant.planId,
+          trialEndsAt: createdAccount.tenant.trialEndsAt,
+        },
+        subscription: {
+          status: SubscriptionStatus.TRIALING,
+        },
+      };
     } catch (error) {
-      if (authUser) {
-        await this.supabaseAuthService.deleteUser(authUser.id);
-      }
+      await this.supabaseAuthService.deleteUser(authUser.id);
       throw error;
     }
   }
 
-  async login(dto: LoginDto) {
-    const email = dto.email.trim().toLowerCase();
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials.');
-    }
-
-    const passwordMatches = await compare(dto.password, user.passwordHash);
-    if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials.');
-    }
-
-    return this.buildAuthResponse(user);
-  }
-
   async getMe(currentUser: CurrentUserData) {
-    if (currentUser.authProvider === 'supabase') {
-      const profile = await this.prisma.userProfile.findUnique({
-        where: { id: currentUser.userId },
-        select: {
-          id: true,
-          tenantId: true,
-          name: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-
-      if (!profile) {
-        throw new UnauthorizedException(
-          'Authenticated Supabase user profile was not found.',
-        );
-      }
-
-      return {
-        ...profile,
-        email: currentUser.email,
-      };
-    }
-
-    return this.prisma.user.findUniqueOrThrow({
+    const profile = await this.prisma.userProfile.findUnique({
       where: { id: currentUser.userId },
       select: {
         id: true,
         tenantId: true,
         name: true,
-        email: true,
         role: true,
         createdAt: true,
         updatedAt: true,
       },
     });
-  }
 
-  private buildAuthResponse(user: User) {
-    const payload: JwtPayload = {
-      sub: user.id,
-      userId: user.id,
-      tenantId: user.tenantId,
-      email: user.email,
-      role: user.role,
-      authProvider: 'legacy',
-    };
+    if (!profile) {
+      throw new UnauthorizedException(
+        'Authenticated Supabase user profile was not found.',
+      );
+    }
 
     return {
-      accessToken: this.jwtService.sign(payload),
-      user: {
-        id: user.id,
-        tenantId: user.tenantId,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      ...profile,
+      email: currentUser.email,
+      authProvider: currentUser.authProvider,
     };
   }
 

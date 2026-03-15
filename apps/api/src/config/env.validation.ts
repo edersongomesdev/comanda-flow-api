@@ -10,16 +10,14 @@ export interface EnvVariables {
   FRONTEND_VERCEL_PROJECTS?: string;
   DATABASE_URL: string;
   DIRECT_URL: string;
-  JWT_SECRET: string;
-  JWT_EXPIRES_IN: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_START?: string;
   STRIPE_PRICE_ESSENCIAL?: string;
   STRIPE_PRICE_MESA?: string;
   STRIPE_PRICE_PREMIUM?: string;
-  SUPABASE_URL?: string;
-  SUPABASE_ANON_KEY?: string;
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_STORAGE_BUCKET: string;
 }
@@ -65,8 +63,6 @@ export function validateEnv(env: EnvInput): EnvVariables {
     ),
     DATABASE_URL: readRequiredString(env, 'DATABASE_URL'),
     DIRECT_URL: readRequiredString(env, 'DIRECT_URL'),
-    JWT_SECRET: readRequiredString(env, 'JWT_SECRET'),
-    JWT_EXPIRES_IN: readOptionalString(env, 'JWT_EXPIRES_IN') ?? '7d',
     STRIPE_SECRET_KEY: readOptionalString(env, 'STRIPE_SECRET_KEY'),
     STRIPE_WEBHOOK_SECRET: readOptionalString(env, 'STRIPE_WEBHOOK_SECRET'),
     STRIPE_PRICE_START: readOptionalString(env, 'STRIPE_PRICE_START'),
@@ -77,8 +73,8 @@ export function validateEnv(env: EnvInput): EnvVariables {
     STRIPE_PRICE_PREMIUM:
       readOptionalString(env, 'STRIPE_PRICE_PREMIUM') ??
       readOptionalString(env, 'STRIPE_PRICE_ELITE'),
-    SUPABASE_URL: readOptionalString(env, 'SUPABASE_URL'),
-    SUPABASE_ANON_KEY: readOptionalString(env, 'SUPABASE_ANON_KEY'),
+    SUPABASE_URL: readRequiredString(env, 'SUPABASE_URL'),
+    SUPABASE_ANON_KEY: readRequiredString(env, 'SUPABASE_ANON_KEY'),
     SUPABASE_SERVICE_ROLE_KEY: readOptionalString(
       env,
       'SUPABASE_SERVICE_ROLE_KEY',

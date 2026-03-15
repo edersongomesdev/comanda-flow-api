@@ -1,8 +1,7 @@
 -- Comanda Flow
 -- Generated from prisma/seed-data.ts to match prisma/seed.ts.
--- Owner login: carlos@generalburguer.com / demo123
--- Note: this seed provisions the legacy "User" table only.
--- For Supabase Auth flows, create auth.users and public.user_profiles separately.
+-- This seed provisions tenant, catalog and subscription data only.
+-- Provision authenticated users separately via /auth/register or the Supabase Auth admin API.
 
 BEGIN;
 
@@ -54,33 +53,6 @@ DO UPDATE SET
     "maxTables" = EXCLUDED."maxTables",
     "deliveryAreas" = EXCLUDED."deliveryAreas",
     "paymentMethods" = EXCLUDED."paymentMethods",
-    "updatedAt" = CURRENT_TIMESTAMP;
-
-INSERT INTO "User" (
-    "id",
-    "tenantId",
-    "name",
-    "email",
-    "passwordHash",
-    "role",
-    "updatedAt"
-)
-SELECT
-    'clseedusercarlos0000000001',
-    "id",
-    'Carlos Silva',
-    'carlos@generalburguer.com',
-    '$2a$10$hpv/UmNB4T4EfuQjO93Ml.zOdFqQ9fzJ0lO7o7b6zerzgiffJ2HPi',
-    'OWNER'::"UserRole",
-    CURRENT_TIMESTAMP
-FROM "Tenant"
-WHERE "slug" = 'general-burguer'
-ON CONFLICT ("email")
-DO UPDATE SET
-    "tenantId" = EXCLUDED."tenantId",
-    "name" = EXCLUDED."name",
-    "passwordHash" = EXCLUDED."passwordHash",
-    "role" = EXCLUDED."role",
     "updatedAt" = CURRENT_TIMESTAMP;
 
 INSERT INTO "Subscription" (

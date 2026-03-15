@@ -1,108 +1,91 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Comanda Flow API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend NestJS multi-tenant para o Comanda Flow.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Auth
 
-## Description
+O backend usa `Supabase Auth` como fonte única de identidade.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- O frontend autentica o usuário com Supabase.
+- O frontend envia o `access_token` do Supabase como `Authorization: Bearer <token>`.
+- A API valida o token no Supabase e resolve o contexto interno em `user_profiles`.
+- Tenant, role e permissões continuam vindo do banco da aplicação via Prisma.
 
-## Project setup
+`POST /auth/login` não emite mais JWT e responde `410 Gone`.
+`POST /auth/register` e `POST /storage/upload-url` respondem `503 Service Unavailable` quando `SUPABASE_SERVICE_ROLE_KEY` não está configurada.
 
-```bash
-$ npm install
-```
+## Endpoints principais
 
-## Compile and run the project
+- `GET /health`: liveness sem autenticação.
+- `POST /auth/register`: cria usuário no Supabase Auth, tenant interno, subscription inicial e `userProfile`.
+- `GET /auth/me`: exige bearer token do Supabase e retorna o perfil interno resolvido para o usuário autenticado.
+- `POST /auth/login`: descontinuado. O frontend deve autenticar diretamente no Supabase.
 
-```bash
-# development
-$ npm run start
+## Variáveis de ambiente
 
-# watch mode
-$ npm run start:dev
+Obrigatórias:
 
-# production mode
-$ npm run start:prod
-```
+- `PORT`
+- `NODE_ENV`
+- `FRONTEND_URL`
+- `DATABASE_URL`
+- `DIRECT_URL`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
 
-## Run tests
+Obrigatórias apenas para rotas/serviços administrativos:
 
-```bash
-# unit tests
-$ npm run test
+- `SUPABASE_SERVICE_ROLE_KEY`
+  - necessária para `POST /auth/register`
+  - necessária para signed upload URLs no módulo de storage
+  - se ausente, a aplicação sobe normalmente, mas essas rotas respondem `503`
 
-# e2e tests
-$ npm run test:e2e
+Opcionais:
 
-# test coverage
-$ npm run test:cov
-```
+- `FRONTEND_URLS`
+- `FRONTEND_VERCEL_PROJECTS`
+- `SUPABASE_STORAGE_BUCKET`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_START`
+- `STRIPE_PRICE_ESSENCIAL`
+- `STRIPE_PRICE_MESA`
+- `STRIPE_PRICE_PREMIUM`
 
-## Database SQL artifacts
+Consulte [`apps/api/.env.example`](/home/gomesederson159/comanda-flow-api/apps/api/.env.example).
+
+## Desenvolvimento
 
 ```bash
-$ npm run prisma:sql:generate
+npm install
+npm --workspace apps/api run build
+npm --workspace apps/api run start:dev
 ```
 
-This command regenerates [supabase/sql/001_comanda_flow_init.sql](supabase/sql/001_comanda_flow_init.sql) directly from [prisma/schema.prisma](prisma/schema.prisma) and rebuilds [supabase/sql/002_comanda_flow_seed_minimal.sql](supabase/sql/002_comanda_flow_seed_minimal.sql) from the shared seed data used by [prisma/seed.ts](prisma/seed.ts).
-
-The generated `001` file is a clean baseline for an empty database. For an existing database that is still on the legacy schema, apply the Prisma migrations or recreate the schema before running the seed SQL.
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## SQL e Prisma
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm --workspace apps/api run prisma:generate
+npm --workspace apps/api run prisma:migrate:deploy
+npm --workspace apps/api run prisma:sql:generate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+`User` permanece no schema apenas como legado. O fluxo ativo de autenticação usa `user_profiles` vinculando `public.user_profiles.id` ao `auth.users.id` do Supabase.
+O seed mínimo não cria mais login local nem popula a tabela `User`.
 
-## Resources
+## Fluxo do frontend
 
-Check out a few resources that may come in handy when working with NestJS:
+1. No cadastro, chame `POST /auth/register` com `name`, `email`, `password`, `planId` e, opcionalmente, `tenantName`/`tenantSlug`.
+2. Após sucesso no cadastro, faça login no Supabase no frontend com `supabase.auth.signInWithPassword`.
+3. Envie o access token retornado pelo Supabase para a API.
+4. Use `GET /auth/me` para hidratar o contexto do usuário autenticado.
+5. Se `GET /auth/me` responder `401`, trate como token inválido/expirado ou usuário sem `userProfile` provisionado.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## Observações de deploy
 
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Não configure `JWT_SECRET`: ele não é mais usado.
+- Não exponha `SUPABASE_SERVICE_ROLE_KEY` no frontend.
+- Se `SUPABASE_ANON_KEY` ou `SUPABASE_URL` estiverem ausentes, o bootstrap falha na validação de ambiente antes da API subir.
+- Se `SUPABASE_SERVICE_ROLE_KEY` estiver ausente, a API ainda sobe e responde `GET /health`, mas `POST /auth/register` e rotas de storage assinadas respondem `503` com mensagem explícita de configuração.
+- `GET /auth/me` responde `401` para token Supabase inválido/expirado e também para usuários sem `userProfile`.
+- Em `NODE_ENV=production`, o Swagger não é exposto. Fora de produção, ele fica em `/docs`.

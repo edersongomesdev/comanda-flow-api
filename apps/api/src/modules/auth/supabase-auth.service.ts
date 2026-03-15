@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -23,6 +24,9 @@ interface CreateSupabaseUserInput {
   tenantSlug: string;
 }
 
+const SUPABASE_AUTH_ADMIN_UNAVAILABLE_MESSAGE =
+  'Supabase Auth administrative operations are unavailable until SUPABASE_SERVICE_ROLE_KEY is configured.';
+
 @Injectable()
 export class SupabaseAuthService {
   private readonly logger = new Logger(SupabaseAuthService.name);
@@ -33,20 +37,16 @@ export class SupabaseAuthService {
 
   isAdminConfigured() {
     return Boolean(
-      this.getSupabaseUrl() &&
-        this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim(),
+      this.configService.get<string>('SUPABASE_URL')?.trim() &&
+      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim(),
     );
-  }
-
-  isAuthVerificationConfigured() {
-    return Boolean(this.getSupabaseUrl() && this.getSupabaseApiKey());
   }
 
   async createUser(input: CreateSupabaseUserInput) {
     const { data, error } = await this.getAdminClient().auth.admin.createUser({
       email: input.email,
       password: input.password,
-      // Keep new accounts usable during the migration window.
+      // Keep newly provisioned accounts able to sign in immediately.
       email_confirm: true,
       user_metadata: {
         name: input.name,
@@ -82,11 +82,8 @@ export class SupabaseAuthService {
   }
 
   async getUserFromAccessToken(accessToken: string): Promise<User | null> {
-    if (!this.isAuthVerificationConfigured()) {
-      return null;
-    }
-
-    const { data, error } = await this.getAuthClient().auth.getUser(accessToken);
+    const { data, error } =
+      await this.getAuthClient().auth.getUser(accessToken);
 
     if (error || !data.user) {
       return null;
@@ -101,7 +98,9 @@ export class SupabaseAuthService {
         (error.status === 409 || error.status === 422)) ||
       /already been registered|already exists|duplicate/i.test(error.message)
     ) {
-      return new ConflictException('An account with this email already exists.');
+      return new ConflictException(
+        'An account with this email already exists.',
+      );
     }
 
     this.logger.error(`Supabase Auth error: ${error.message}`);
@@ -113,6 +112,8 @@ export class SupabaseAuthService {
 
   private getAdminClient() {
     if (!this.adminClient) {
+      this.assertAdminConfigured();
+
       const supabaseUrl = this.getRequiredConfigValue(
         'SUPABASE_URL',
         'Supabase URL is not configured.',
@@ -139,13 +140,10 @@ export class SupabaseAuthService {
         'SUPABASE_URL',
         'Supabase URL is not configured.',
       );
-      const apiKey = this.getSupabaseApiKey();
-
-      if (!apiKey) {
-        throw new InternalServerErrorException(
-          'Supabase anon or service role key is not configured.',
-        );
-      }
+      const apiKey = this.getRequiredConfigValue(
+        'SUPABASE_ANON_KEY',
+        'Supabase anon key is not configured.',
+      );
 
       this.authClient = createClient(supabaseUrl, apiKey, {
         auth: {
@@ -158,15 +156,13 @@ export class SupabaseAuthService {
     return this.authClient;
   }
 
-  private getSupabaseUrl() {
-    return this.configService.get<string>('SUPABASE_URL')?.trim();
-  }
-
-  private getSupabaseApiKey() {
-    return (
-      this.configService.get<string>('SUPABASE_ANON_KEY')?.trim() ||
-      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim()
-    );
+  private assertAdminConfigured() {
+    if (!this.isAdminConfigured()) {
+      this.logger.error(SUPABASE_AUTH_ADMIN_UNAVAILABLE_MESSAGE);
+      throw new ServiceUnavailableException(
+        SUPABASE_AUTH_ADMIN_UNAVAILABLE_MESSAGE,
+      );
+    }
   }
 
   private getRequiredConfigValue(key: string, errorMessage: string) {

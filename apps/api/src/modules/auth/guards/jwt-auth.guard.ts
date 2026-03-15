@@ -4,16 +4,13 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CurrentUserData } from '../../../common/types/current-user.type';
-import { JwtPayload } from '../../../common/types/jwt-payload.type';
 import { SupabaseAuthService } from '../supabase-auth.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly supabaseAuthService: SupabaseAuthService,
   ) {}
@@ -29,52 +26,39 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Missing bearer token.');
     }
 
-    const supabaseUser = await this.supabaseAuthService.getUserFromAccessToken(
-      token,
-    );
+    const supabaseUser =
+      await this.supabaseAuthService.getUserFromAccessToken(token);
 
-    if (supabaseUser) {
-      const profile = await this.prisma.userProfile.findUnique({
-        where: { id: supabaseUser.id },
-        select: {
-          id: true,
-          tenantId: true,
-          role: true,
-        },
-      });
-
-      if (!profile || !supabaseUser.email) {
-        throw new UnauthorizedException(
-          'Authenticated Supabase user is missing an application profile.',
-        );
-      }
-
-      request.user = {
-        userId: profile.id,
-        tenantId: profile.tenantId,
-        email: supabaseUser.email,
-        role: profile.role,
-        authProvider: 'supabase',
-      };
-
-      return true;
+    if (!supabaseUser?.email) {
+      throw new UnauthorizedException(
+        'Invalid or expired Supabase access token.',
+      );
     }
 
-    try {
-      const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
+    const profile = await this.prisma.userProfile.findUnique({
+      where: { id: supabaseUser.id },
+      select: {
+        id: true,
+        tenantId: true,
+        role: true,
+      },
+    });
 
-      request.user = {
-        userId: payload.sub,
-        tenantId: payload.tenantId,
-        email: payload.email,
-        role: payload.role,
-        authProvider: 'legacy',
-      };
-
-      return true;
-    } catch {
-      throw new UnauthorizedException('Invalid or expired access token.');
+    if (!profile) {
+      throw new UnauthorizedException(
+        'Authenticated Supabase user does not have an application profile.',
+      );
     }
+
+    request.user = {
+      userId: profile.id,
+      tenantId: profile.tenantId,
+      email: supabaseUser.email,
+      role: profile.role,
+      authProvider: 'supabase',
+    };
+
+    return true;
   }
 
   private extractBearerToken(authorizationHeader?: string) {

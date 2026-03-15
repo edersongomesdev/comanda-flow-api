@@ -13,7 +13,6 @@ async function main() {
     prisma.category.deleteMany(),
     prisma.table.deleteMany(),
     prisma.subscription.deleteMany(),
-    prisma.user.deleteMany(),
     prisma.tenant.deleteMany(),
   ]);
 
@@ -40,15 +39,6 @@ async function main() {
         create: {
           id: demoSeed.subscription.id,
           status: demoSeed.subscription.status,
-        },
-      },
-      users: {
-        create: {
-          id: demoSeed.owner.id,
-          name: demoSeed.owner.name,
-          email: demoSeed.owner.email,
-          passwordHash: demoSeed.owner.passwordHash,
-          role: demoSeed.owner.role,
         },
       },
     },
@@ -121,8 +111,8 @@ async function main() {
     JSON.stringify(
       {
         tenantSlug: demoSeed.tenant.slug,
-        ownerEmail: demoSeed.owner.email,
-        ownerPassword: demoSeed.owner.password,
+        authProvisioning:
+          'Provision users via /auth/register or the Supabase Auth admin API.',
       },
       null,
       2,

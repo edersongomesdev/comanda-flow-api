@@ -78,8 +78,15 @@ function generateInitSql(): string {
 }
 
 function generateSeedSql(): string {
-  const { tenant, owner, subscription, categories, modifierGroup, menuItems, menuItemModifierGroups, tables } =
-    demoSeed;
+  const {
+    tenant,
+    subscription,
+    categories,
+    modifierGroup,
+    menuItems,
+    menuItemModifierGroups,
+    tables,
+  } = demoSeed;
   const trialPeriodSql = `CURRENT_TIMESTAMP + INTERVAL '${demoSeed.trialDays} days'`;
   const categoryValuesSql = categories
     .map(
@@ -159,9 +166,8 @@ DO UPDATE SET
 
   return `-- Comanda Flow
 -- Generated from prisma/seed-data.ts to match prisma/seed.ts.
--- Owner login: ${owner.email} / ${owner.password}
--- Note: this seed provisions the legacy "User" table only.
--- For Supabase Auth flows, create auth.users and public.user_profiles separately.
+-- This seed provisions tenant, catalog and subscription data only.
+-- Provision authenticated users separately via /auth/register or the Supabase Auth admin API.
 
 BEGIN;
 
@@ -213,33 +219,6 @@ DO UPDATE SET
     "maxTables" = EXCLUDED."maxTables",
     "deliveryAreas" = EXCLUDED."deliveryAreas",
     "paymentMethods" = EXCLUDED."paymentMethods",
-    "updatedAt" = CURRENT_TIMESTAMP;
-
-INSERT INTO "User" (
-    "id",
-    "tenantId",
-    "name",
-    "email",
-    "passwordHash",
-    "role",
-    "updatedAt"
-)
-SELECT
-    ${quoteSql(owner.id)},
-    "id",
-    ${quoteSql(owner.name)},
-    ${quoteSql(owner.email)},
-    ${quoteSql(owner.passwordHash)},
-    ${enumSql(owner.role, 'UserRole')},
-    CURRENT_TIMESTAMP
-FROM "Tenant"
-WHERE "slug" = ${quoteSql(tenant.slug)}
-ON CONFLICT ("email")
-DO UPDATE SET
-    "tenantId" = EXCLUDED."tenantId",
-    "name" = EXCLUDED."name",
-    "passwordHash" = EXCLUDED."passwordHash",
-    "role" = EXCLUDED."role",
     "updatedAt" = CURRENT_TIMESTAMP;
 
 INSERT INTO "Subscription" (

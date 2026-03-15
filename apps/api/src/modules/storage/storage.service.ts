@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -25,6 +26,9 @@ const MIME_TO_EXTENSIONS: Record<StorageImageContentType, readonly string[]> = {
   'image/webp': ['webp'],
 };
 
+const STORAGE_SIGNED_UPLOADS_UNAVAILABLE_MESSAGE =
+  'Supabase Storage signed uploads are unavailable until SUPABASE_SERVICE_ROLE_KEY is configured.';
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
@@ -33,6 +37,8 @@ export class StorageService {
   constructor(private readonly configService: ConfigService) {}
 
   async createUploadUrl(tenantId: string, dto: CreateUploadUrlDto) {
+    this.assertAdminConfigured();
+
     const filename = this.sanitizeFilename(dto.filename);
     const extension = this.extractExtension(filename);
     const expectedExtensions = MIME_TO_EXTENSIONS[dto.contentType];
@@ -70,6 +76,8 @@ export class StorageService {
 
   private getSupabaseClient() {
     if (!this.supabaseClient) {
+      this.assertAdminConfigured();
+
       const supabaseUrl = this.getRequiredConfigValue(
         'SUPABASE_URL',
         'Supabase URL is not configured.',
@@ -88,6 +96,22 @@ export class StorageService {
     }
 
     return this.supabaseClient;
+  }
+
+  private isAdminConfigured() {
+    return Boolean(
+      this.configService.get<string>('SUPABASE_URL')?.trim() &&
+      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim(),
+    );
+  }
+
+  private assertAdminConfigured() {
+    if (!this.isAdminConfigured()) {
+      this.logger.error(STORAGE_SIGNED_UPLOADS_UNAVAILABLE_MESSAGE);
+      throw new ServiceUnavailableException(
+        STORAGE_SIGNED_UPLOADS_UNAVAILABLE_MESSAGE,
+      );
+    }
   }
 
   private getStorageBucket() {

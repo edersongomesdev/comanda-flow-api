@@ -1,0 +1,1785 @@
+diff --git a/apps/api/.env.example b/apps/api/.env.example
+index 6ccce22..71749cd 100644
+--- a/apps/api/.env.example
++++ b/apps/api/.env.example
+@@ -10,9 +10,6 @@ FRONTEND_VERCEL_PROJECTS=
+ DATABASE_URL=postgresql://postgres:postgres@db.example.supabase.co:5432/postgres
+ DIRECT_URL=postgresql://postgres:postgres@db.example.supabase.co:5432/postgres
+ 
+-JWT_SECRET=change-me
+-JWT_EXPIRES_IN=7d
+-
+ # Stripe billing
+ STRIPE_SECRET_KEY=
+ STRIPE_WEBHOOK_SECRET=
+@@ -25,8 +22,9 @@ STRIPE_PRICE_MESA=
+ # PREMIUM -> STRIPE_PRICE_PREMIUM
+ STRIPE_PRICE_PREMIUM=
+ 
+-# Supabase Storage
++# Supabase Auth / Storage
+ SUPABASE_URL=https://example.supabase.co
+-SUPABASE_ANON_KEY=
++SUPABASE_ANON_KEY=your-supabase-anon-key
++# Required for backend-managed user provisioning and signed storage uploads.
+ SUPABASE_SERVICE_ROLE_KEY=
+ SUPABASE_STORAGE_BUCKET=menu-assets
+diff --git a/apps/api/README.md b/apps/api/README.md
+index c471b01..ed2698c 100644
+--- a/apps/api/README.md
++++ b/apps/api/README.md
+@@ -1,108 +1,84 @@
+-<p align="center">
+-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+-</p>
+-
+-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
+-[circleci-url]: https://circleci.com/gh/nestjs/nest
+-
+-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
+-    <p align="center">
+-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
+-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
+-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
+-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
+-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
+-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
+-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
+-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
+-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
+-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+-</p>
+-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
+-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+-
+-## Description
+-
+-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+-
+-## Project setup
++# Comanda Flow API
+ 
+-```bash
+-$ npm install
+-```
++Backend NestJS multi-tenant para o Comanda Flow.
+ 
+-## Compile and run the project
++## Auth
+ 
+-```bash
+-# development
+-$ npm run start
++O backend usa `Supabase Auth` como fonte única de identidade.
+ 
+-# watch mode
+-$ npm run start:dev
++- O frontend autentica o usuário com Supabase.
++- O frontend envia o `access_token` do Supabase como `Authorization: Bearer <token>`.
++- A API valida o token no Supabase e resolve o contexto interno em `user_profiles`.
++- Tenant, role e permissões continuam vindo do banco da aplicação via Prisma.
+ 
+-# production mode
+-$ npm run start:prod
+-```
++`POST /auth/login` não emite mais JWT e responde `410 Gone`.
+ 
+-## Run tests
++## Endpoints principais
+ 
+-```bash
+-# unit tests
+-$ npm run test
++- `GET /health`: liveness sem autenticação.
++- `POST /auth/register`: cria usuário no Supabase Auth, tenant interno, subscription inicial e `userProfile`.
++- `GET /auth/me`: exige bearer token do Supabase e retorna o perfil interno resolvido para o usuário autenticado.
+ 
+-# e2e tests
+-$ npm run test:e2e
++## Variáveis de ambiente
+ 
+-# test coverage
+-$ npm run test:cov
+-```
++Obrigatórias:
+ 
+-## Database SQL artifacts
++- `PORT`
++- `NODE_ENV`
++- `FRONTEND_URL`
++- `DATABASE_URL`
++- `DIRECT_URL`
++- `SUPABASE_URL`
++- `SUPABASE_ANON_KEY`
+ 
+-```bash
+-$ npm run prisma:sql:generate
+-```
++Obrigatórias apenas para rotas/serviços administrativos:
+ 
+-This command regenerates [supabase/sql/001_comanda_flow_init.sql](supabase/sql/001_comanda_flow_init.sql) directly from [prisma/schema.prisma](prisma/schema.prisma) and rebuilds [supabase/sql/002_comanda_flow_seed_minimal.sql](supabase/sql/002_comanda_flow_seed_minimal.sql) from the shared seed data used by [prisma/seed.ts](prisma/seed.ts).
++- `SUPABASE_SERVICE_ROLE_KEY`
++  - necessária para `POST /auth/register`
++  - necessária para signed upload URLs no módulo de storage
+ 
+-The generated `001` file is a clean baseline for an empty database. For an existing database that is still on the legacy schema, apply the Prisma migrations or recreate the schema before running the seed SQL.
++Opcionais:
+ 
+-## Deployment
++- `FRONTEND_URLS`
++- `FRONTEND_VERCEL_PROJECTS`
++- `SUPABASE_STORAGE_BUCKET`
++- `STRIPE_SECRET_KEY`
++- `STRIPE_WEBHOOK_SECRET`
++- `STRIPE_PRICE_START`
++- `STRIPE_PRICE_ESSENCIAL`
++- `STRIPE_PRICE_MESA`
++- `STRIPE_PRICE_PREMIUM`
+ 
+-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
++Consulte [`apps/api/.env.example`](/home/gomesederson159/comanda-flow-api/apps/api/.env.example).
+ 
+-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
++## Desenvolvimento
+ 
+ ```bash
+-$ npm install -g @nestjs/mau
+-$ mau deploy
++npm install
++npm --workspace apps/api run build
++npm --workspace apps/api run start:dev
+ ```
+ 
+-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+-
+-## Resources
+-
+-Check out a few resources that may come in handy when working with NestJS:
++## SQL e Prisma
+ 
+-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
+-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
+-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
+-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
+-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
+-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
+-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
+-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+-
+-## Support
++```bash
++npm --workspace apps/api run prisma:generate
++npm --workspace apps/api run prisma:migrate:deploy
++npm --workspace apps/api run prisma:sql:generate
++```
+ 
+-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
++`User` permanece no schema apenas como legado. O fluxo ativo de autenticação usa `user_profiles` vinculando `public.user_profiles.id` ao `auth.users.id` do Supabase.
+ 
+-## Stay in touch
++## Fluxo do frontend
+ 
+-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
+-- Website - [https://nestjs.com](https://nestjs.com/)
+-- Twitter - [@nestframework](https://twitter.com/nestframework)
++1. No cadastro, chame `POST /auth/register` com `name`, `email`, `password`, `planId` e, opcionalmente, `tenantName`/`tenantSlug`.
++2. Após sucesso no cadastro, faça login no Supabase no frontend com `supabase.auth.signInWithPassword`.
++3. Envie o access token retornado pelo Supabase para a API.
++4. Use `GET /auth/me` para hidratar o contexto do usuário autenticado.
+ 
+-## License
++## Observações de deploy
+ 
+-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
++- Não configure `JWT_SECRET`: ele não é mais usado.
++- Não exponha `SUPABASE_SERVICE_ROLE_KEY` no frontend.
++- Se `SUPABASE_SERVICE_ROLE_KEY` estiver ausente, a API ainda sobe e responde `GET /health`, mas `POST /auth/register` e rotas de storage assinadas falham com erro de configuração.
++- Em `NODE_ENV=production`, o Swagger não é exposto. Fora de produção, ele fica em `/docs`.
+diff --git a/apps/api/package.json b/apps/api/package.json
+index 017ffc2..88c5b7f 100644
+--- a/apps/api/package.json
++++ b/apps/api/package.json
+@@ -31,17 +31,12 @@
+     "@nestjs/common": "^10.4.15",
+     "@nestjs/config": "^3.3.0",
+     "@nestjs/core": "^10.4.15",
+-    "@nestjs/jwt": "^10.2.0",
+-    "@nestjs/passport": "^10.0.3",
+     "@nestjs/platform-express": "^10.4.15",
+     "@nestjs/swagger": "^7.4.2",
+     "@prisma/client": "^5.22.0",
+     "@supabase/supabase-js": "2.57.4",
+-    "bcryptjs": "^2.4.3",
+     "class-transformer": "^0.5.1",
+     "class-validator": "^0.14.1",
+-    "passport": "^0.7.0",
+-    "passport-jwt": "^4.0.1",
+     "reflect-metadata": "^0.2.2",
+     "rxjs": "^7.8.1",
+     "stripe": "^18.1.1",
+@@ -56,7 +51,6 @@
+     "@types/express": "^5.0.0",
+     "@types/jest": "^29.5.14",
+     "@types/node": "^18.19.76",
+-    "@types/passport-jwt": "^4.0.1",
+     "@types/supertest": "^6.0.2",
+     "eslint": "^9.18.0",
+     "eslint-config-prettier": "^10.0.1",
+diff --git a/apps/api/src/common/types/bcryptjs.d.ts b/apps/api/src/common/types/bcryptjs.d.ts
+deleted file mode 100644
+index 0e0686b..0000000
+--- a/apps/api/src/common/types/bcryptjs.d.ts
++++ /dev/null
+@@ -1,7 +0,0 @@
+-declare module 'bcryptjs' {
+-  export function hash(
+-    data: string,
+-    saltOrRounds: string | number,
+-  ): Promise<string>;
+-  export function compare(data: string, encrypted: string): Promise<boolean>;
+-}
+diff --git a/apps/api/src/common/types/current-user.type.ts b/apps/api/src/common/types/current-user.type.ts
+index abbb0e7..d75f944 100644
+--- a/apps/api/src/common/types/current-user.type.ts
++++ b/apps/api/src/common/types/current-user.type.ts
+@@ -1,7 +1,9 @@
++import { UserRole } from '@prisma/client';
++
+ export interface CurrentUserData {
+   userId: string;
+   tenantId: string;
+   email: string;
+-  role: 'OWNER' | 'ADMIN';
+-  authProvider: 'legacy' | 'supabase';
++  role: UserRole;
++  authProvider: 'supabase';
+ }
+diff --git a/apps/api/src/common/types/jwt-payload.type.ts b/apps/api/src/common/types/jwt-payload.type.ts
+deleted file mode 100644
+index 63f49fa..0000000
+--- a/apps/api/src/common/types/jwt-payload.type.ts
++++ /dev/null
+@@ -1,10 +0,0 @@
+-import { CurrentUserData } from './current-user.type';
+-
+-export interface JwtPayload {
+-  sub: string;
+-  userId: string;
+-  tenantId: string;
+-  email: string;
+-  role: CurrentUserData['role'];
+-  authProvider?: 'legacy';
+-}
+diff --git a/apps/api/src/config/app.config.ts b/apps/api/src/config/app.config.ts
+index 4a1cf80..71c8b62 100644
+--- a/apps/api/src/config/app.config.ts
++++ b/apps/api/src/config/app.config.ts
+@@ -2,8 +2,6 @@ export default () => ({
+   PORT: Number.parseInt(process.env.PORT ?? '3001', 10),
+   NODE_ENV: process.env.NODE_ENV ?? 'development',
+   FRONTEND_URL: process.env.FRONTEND_URL ?? 'http://localhost:4173',
+-  JWT_SECRET: process.env.JWT_SECRET ?? '',
+-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN ?? '7d',
+   DATABASE_URL: process.env.DATABASE_URL ?? '',
+   DIRECT_URL: process.env.DIRECT_URL ?? '',
+   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ?? '',
+diff --git a/apps/api/src/config/env.validation.ts b/apps/api/src/config/env.validation.ts
+index b56cee2..c2d6b9f 100644
+--- a/apps/api/src/config/env.validation.ts
++++ b/apps/api/src/config/env.validation.ts
+@@ -10,16 +10,14 @@ export interface EnvVariables {
+   FRONTEND_VERCEL_PROJECTS?: string;
+   DATABASE_URL: string;
+   DIRECT_URL: string;
+-  JWT_SECRET: string;
+-  JWT_EXPIRES_IN: string;
+   STRIPE_SECRET_KEY?: string;
+   STRIPE_WEBHOOK_SECRET?: string;
+   STRIPE_PRICE_START?: string;
+   STRIPE_PRICE_ESSENCIAL?: string;
+   STRIPE_PRICE_MESA?: string;
+   STRIPE_PRICE_PREMIUM?: string;
+-  SUPABASE_URL?: string;
+-  SUPABASE_ANON_KEY?: string;
++  SUPABASE_URL: string;
++  SUPABASE_ANON_KEY: string;
+   SUPABASE_SERVICE_ROLE_KEY?: string;
+   SUPABASE_STORAGE_BUCKET: string;
+ }
+@@ -65,8 +63,6 @@ export function validateEnv(env: EnvInput): EnvVariables {
+     ),
+     DATABASE_URL: readRequiredString(env, 'DATABASE_URL'),
+     DIRECT_URL: readRequiredString(env, 'DIRECT_URL'),
+-    JWT_SECRET: readRequiredString(env, 'JWT_SECRET'),
+-    JWT_EXPIRES_IN: readOptionalString(env, 'JWT_EXPIRES_IN') ?? '7d',
+     STRIPE_SECRET_KEY: readOptionalString(env, 'STRIPE_SECRET_KEY'),
+     STRIPE_WEBHOOK_SECRET: readOptionalString(env, 'STRIPE_WEBHOOK_SECRET'),
+     STRIPE_PRICE_START: readOptionalString(env, 'STRIPE_PRICE_START'),
+@@ -77,8 +73,8 @@ export function validateEnv(env: EnvInput): EnvVariables {
+     STRIPE_PRICE_PREMIUM:
+       readOptionalString(env, 'STRIPE_PRICE_PREMIUM') ??
+       readOptionalString(env, 'STRIPE_PRICE_ELITE'),
+-    SUPABASE_URL: readOptionalString(env, 'SUPABASE_URL'),
+-    SUPABASE_ANON_KEY: readOptionalString(env, 'SUPABASE_ANON_KEY'),
++    SUPABASE_URL: readRequiredString(env, 'SUPABASE_URL'),
++    SUPABASE_ANON_KEY: readRequiredString(env, 'SUPABASE_ANON_KEY'),
+     SUPABASE_SERVICE_ROLE_KEY: readOptionalString(
+       env,
+       'SUPABASE_SERVICE_ROLE_KEY',
+diff --git a/apps/api/src/main.ts b/apps/api/src/main.ts
+index 34c4107..6803d2f 100644
+--- a/apps/api/src/main.ts
++++ b/apps/api/src/main.ts
+@@ -1,4 +1,4 @@
+-import { ValidationPipe } from '@nestjs/common';
++import { Logger, ValidationPipe } from '@nestjs/common';
+ import { ConfigService } from '@nestjs/config';
+ import { NestFactory } from '@nestjs/core';
+ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+@@ -6,6 +6,8 @@ import { AppModule } from './app.module';
+ import { PrismaClientExceptionFilter } from './common/filters/prisma-client-exception.filter';
+ import { PrismaService } from './prisma/prisma.service';
+ 
++const bootstrapLogger = new Logger('Bootstrap');
++
+ function normalizeOrigin(origin: string) {
+   try {
+     return new URL(origin).origin;
+@@ -50,87 +52,104 @@ function isAllowedVercelOrigin(origin: string, projectNames: string[]) {
+ }
+ 
+ async function bootstrap() {
+-  const app = await NestFactory.create(AppModule, {
+-    rawBody: true,
+-  });
+-  const configService = app.get(ConfigService);
+-  const prismaService = app.get(PrismaService);
+-  const frontendUrl = configService.get<string>(
+-    'FRONTEND_URL',
+-    'http://localhost:4173',
+-  );
+-  const frontendUrls = parseCommaSeparatedValues(
+-    configService.get<string>('FRONTEND_URLS'),
++  bootstrapLogger.log(
++    `Starting Comanda Flow API (NODE_ENV=${process.env.NODE_ENV ?? 'development'}).`,
+   );
+-  const vercelFrontendProjects = parseCommaSeparatedValues(
+-    configService.get<string>('FRONTEND_VERCEL_PROJECTS'),
+-  );
+-  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+-  const allowedOrigins = new Set(
+-    [
++
++  try {
++    const app = await NestFactory.create(AppModule, {
++      rawBody: true,
++    });
++    const configService = app.get(ConfigService);
++    const prismaService = app.get(PrismaService);
++    const frontendUrl = configService.get<string>(
++      'FRONTEND_URL',
+       'http://localhost:4173',
+-      'http://127.0.0.1:4173',
+-      'https://comandaflow.techmarque.com.br',
+-      frontendUrl,
+-      ...frontendUrls,
+-    ]
+-      .map((origin) => normalizeOrigin(origin))
+-      .filter((origin): origin is string => Boolean(origin)),
+-  );
++    );
++    const frontendUrls = parseCommaSeparatedValues(
++      configService.get<string>('FRONTEND_URLS'),
++    );
++    const vercelFrontendProjects = parseCommaSeparatedValues(
++      configService.get<string>('FRONTEND_VERCEL_PROJECTS'),
++    );
++    const nodeEnv = configService.get<string>('NODE_ENV', 'development');
++    const allowedOrigins = new Set(
++      [
++        'http://localhost:4173',
++        'http://127.0.0.1:4173',
++        'https://comandaflow.techmarque.com.br',
++        frontendUrl,
++        ...frontendUrls,
++      ]
++        .map((origin) => normalizeOrigin(origin))
++        .filter((origin): origin is string => Boolean(origin)),
++    );
++
++    app.enableCors({
++      origin: (origin, callback) => {
++        if (!origin) {
++          callback(null, true);
++          return;
++        }
++
++        const normalizedOrigin = normalizeOrigin(origin);
++        const originIsAllowed =
++          Boolean(normalizedOrigin && allowedOrigins.has(normalizedOrigin)) ||
++          (normalizedOrigin
++            ? isAllowedVercelOrigin(normalizedOrigin, vercelFrontendProjects)
++            : false);
++
++        if (originIsAllowed) {
++          callback(null, true);
++          return;
++        }
++
++        callback(
++          new Error(
++            `CORS blocked for origin: ${origin}. Configure FRONTEND_URL, FRONTEND_URLS or FRONTEND_VERCEL_PROJECTS accordingly.`,
++          ),
++        );
++      },
++      credentials: true,
++    });
+ 
+-  app.enableCors({
+-    origin: (origin, callback) => {
+-      if (!origin) {
+-        callback(null, true);
+-        return;
+-      }
+-
+-      const normalizedOrigin = normalizeOrigin(origin);
+-      const originIsAllowed =
+-        Boolean(normalizedOrigin && allowedOrigins.has(normalizedOrigin)) ||
+-        (normalizedOrigin
+-          ? isAllowedVercelOrigin(normalizedOrigin, vercelFrontendProjects)
+-          : false);
+-
+-      if (originIsAllowed) {
+-        callback(null, true);
+-        return;
+-      }
+-
+-      callback(
+-        new Error(
+-          `CORS blocked for origin: ${origin}. Configure FRONTEND_URL, FRONTEND_URLS or FRONTEND_VERCEL_PROJECTS accordingly.`,
+-        ),
+-      );
+-    },
+-    credentials: true,
+-  });
+-
+-  app.useGlobalPipes(
+-    new ValidationPipe({
+-      whitelist: true,
+-      forbidNonWhitelisted: true,
+-      transform: true,
+-      transformOptions: { enableImplicitConversion: true },
+-    }),
+-  );
+-  app.useGlobalFilters(new PrismaClientExceptionFilter());
+-
+-  if (nodeEnv !== 'production') {
+-    const swaggerConfig = new DocumentBuilder()
+-      .setTitle('Comanda Flow API')
+-      .setDescription('Production-oriented backend for the Comanda Flow SaaS.')
+-      .setVersion('1.0.0')
+-      .addBearerAuth()
+-      .build();
+-
+-    const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+-    SwaggerModule.setup('docs', app, swaggerDocument);
+-  }
++    app.useGlobalPipes(
++      new ValidationPipe({
++        whitelist: true,
++        forbidNonWhitelisted: true,
++        transform: true,
++        transformOptions: { enableImplicitConversion: true },
++      }),
++    );
++    app.useGlobalFilters(new PrismaClientExceptionFilter());
++
++    if (nodeEnv !== 'production') {
++      const swaggerConfig = new DocumentBuilder()
++        .setTitle('Comanda Flow API')
++        .setDescription(
++          'Production-oriented backend for the Comanda Flow SaaS.',
++        )
++        .setVersion('1.0.0')
++        .addBearerAuth()
++        .build();
++
++      const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
++      SwaggerModule.setup('docs', app, swaggerDocument);
++      bootstrapLogger.log('Swagger available at /docs.');
++    }
+ 
+-  prismaService.enableShutdownHooks(app);
+-  const port = configService.get<number>('PORT', 3001);
+-  await app.listen(port);
++    prismaService.enableShutdownHooks(app);
++    const port = configService.get<number>('PORT', 3001);
++    await app.listen(port);
++    bootstrapLogger.log(`API listening on port ${port}.`);
++  } catch (error) {
++    const message =
++      error instanceof Error ? error.message : 'Unknown bootstrap failure.';
++    const stack = error instanceof Error ? error.stack : undefined;
++
++    bootstrapLogger.error(`Application failed to start: ${message}`, stack);
++    process.exit(1);
++  }
+ }
+ 
+ void bootstrap();
+diff --git a/apps/api/src/modules/auth/auth.controller.ts b/apps/api/src/modules/auth/auth.controller.ts
+index 51e05f3..d780ac9 100644
+--- a/apps/api/src/modules/auth/auth.controller.ts
++++ b/apps/api/src/modules/auth/auth.controller.ts
+@@ -2,15 +2,20 @@ import {
+   Body,
+   Controller,
+   Get,
++  GoneException,
+   HttpCode,
+   HttpStatus,
+   Post,
+   UseGuards,
+ } from '@nestjs/common';
+-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
++import {
++  ApiBearerAuth,
++  ApiGoneResponse,
++  ApiOperation,
++  ApiTags,
++} from '@nestjs/swagger';
+ import { CurrentUser } from '../../common/decorators/current-user.decorator';
+ import { CurrentUserData } from '../../common/types/current-user.type';
+-import { LoginDto } from './dto/login.dto';
+ import { RegisterDto } from './dto/register.dto';
+ import { JwtAuthGuard } from './guards/jwt-auth.guard';
+ import { AuthService } from './auth.service';
+@@ -21,22 +26,35 @@ export class AuthController {
+   constructor(private readonly authService: AuthService) {}
+ 
+   @Post('register')
+-  @ApiOperation({ summary: 'Register an owner user and its tenant.' })
++  @ApiOperation({
++    summary: 'Provision a Supabase Auth owner user, tenant and profile.',
++  })
+   register(@Body() dto: RegisterDto) {
+     return this.authService.register(dto);
+   }
+ 
+   @Post('login')
+-  @HttpCode(HttpStatus.OK)
+-  @ApiOperation({ summary: 'Authenticate a user with email and password.' })
+-  login(@Body() dto: LoginDto) {
+-    return this.authService.login(dto);
++  @HttpCode(HttpStatus.GONE)
++  @ApiOperation({
++    summary:
++      'Deprecated. Authentication must be handled by Supabase Auth on the frontend.',
++  })
++  @ApiGoneResponse({
++    description:
++      'Password login is no longer handled by the backend. Use Supabase Auth in the frontend and send the resulting bearer token to the API.',
++  })
++  login() {
++    throw new GoneException(
++      'Password login is no longer handled by the API. Authenticate with Supabase Auth in the frontend and send the Supabase bearer token to the backend.',
++    );
+   }
+ 
+   @Get('me')
+   @UseGuards(JwtAuthGuard)
+   @ApiBearerAuth()
+-  @ApiOperation({ summary: 'Return the authenticated user.' })
++  @ApiOperation({
++    summary: 'Return the authenticated Supabase user and internal profile.',
++  })
+   me(@CurrentUser() currentUser: CurrentUserData) {
+     return this.authService.getMe(currentUser);
+   }
+diff --git a/apps/api/src/modules/auth/auth.module.ts b/apps/api/src/modules/auth/auth.module.ts
+index 26c2443..1501ba0 100644
+--- a/apps/api/src/modules/auth/auth.module.ts
++++ b/apps/api/src/modules/auth/auth.module.ts
+@@ -1,6 +1,4 @@
+ import { Module } from '@nestjs/common';
+-import { JwtModule } from '@nestjs/jwt';
+-import { ConfigService } from '@nestjs/config';
+ import { PrismaModule } from '../../prisma/prisma.module';
+ import { AuthController } from './auth.controller';
+ import { AuthService } from './auth.service';
+@@ -8,20 +6,9 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
+ import { SupabaseAuthService } from './supabase-auth.service';
+ 
+ @Module({
+-  imports: [
+-    PrismaModule,
+-    JwtModule.registerAsync({
+-      inject: [ConfigService],
+-      useFactory: (configService: ConfigService) => ({
+-        secret: configService.getOrThrow<string>('JWT_SECRET'),
+-        signOptions: {
+-          expiresIn: configService.get<string>('JWT_EXPIRES_IN', '7d'),
+-        },
+-      }),
+-    }),
+-  ],
++  imports: [PrismaModule],
+   controllers: [AuthController],
+   providers: [AuthService, SupabaseAuthService, JwtAuthGuard],
+-  exports: [JwtAuthGuard],
++  exports: [SupabaseAuthService, JwtAuthGuard],
+ })
+ export class AuthModule {}
+diff --git a/apps/api/src/modules/auth/auth.service.spec.ts b/apps/api/src/modules/auth/auth.service.spec.ts
+index 4179110..915bd7a 100644
+--- a/apps/api/src/modules/auth/auth.service.spec.ts
++++ b/apps/api/src/modules/auth/auth.service.spec.ts
+@@ -1,23 +1,14 @@
+-import { ConflictException } from '@nestjs/common';
+-import { UserRole } from '@prisma/client';
+-import { JwtService } from '@nestjs/jwt';
++import { ConflictException, UnauthorizedException } from '@nestjs/common';
++import { SubscriptionStatus, UserRole } from '@prisma/client';
+ import { AuthService } from './auth.service';
+ import { SupabaseAuthService } from './supabase-auth.service';
+ 
+-jest.mock('bcryptjs', () => ({
+-  compare: jest.fn(),
+-  hash: jest.fn().mockResolvedValue('hashed-password'),
+-}));
+-
+ describe('AuthService', () => {
+   let service: AuthService;
+   const prisma = {
+-    user: {
+-      findUnique: jest.fn(),
+-      create: jest.fn(),
+-    },
+     userProfile: {
+       create: jest.fn(),
++      findUnique: jest.fn(),
+     },
+     tenant: {
+       findUnique: jest.fn(),
+@@ -29,21 +20,15 @@ describe('AuthService', () => {
+     },
+     $transaction: jest.fn(),
+   };
+-  const jwtService = {
+-    sign: jest.fn(),
+-  };
+   const supabaseAuthService = {
+-    isAdminConfigured: jest.fn(),
+     createUser: jest.fn(),
+     deleteUser: jest.fn(),
+   };
+ 
+   beforeEach(() => {
+     jest.clearAllMocks();
+-    supabaseAuthService.isAdminConfigured.mockReturnValue(true);
+     service = new AuthService(
+       prisma as never,
+-      jwtService as unknown as JwtService,
+       supabaseAuthService as unknown as SupabaseAuthService,
+     );
+     prisma.$transaction.mockImplementation(
+@@ -52,7 +37,6 @@ describe('AuthService', () => {
+           tenant: { create: typeof prisma.tenant.create };
+           subscription: { create: typeof prisma.subscription.create };
+           userProfile: { create: typeof prisma.userProfile.create };
+-          user: { create: typeof prisma.user.create };
+         }) => Promise<unknown>,
+       ) =>
+         callback({
+@@ -65,39 +49,35 @@ describe('AuthService', () => {
+           userProfile: {
+             create: prisma.userProfile.create,
+           },
+-          user: {
+-            create: prisma.user.create,
+-          },
+         }),
+     );
+   });
+ 
+   it('appends a numeric suffix when the derived tenant slug is already taken', async () => {
+-    prisma.user.findUnique.mockResolvedValue(null);
+     prisma.tenant.findMany.mockResolvedValue([
+       { slug: 'carlos-silva' },
+       { slug: 'carlos-silva-2' },
+     ]);
+     prisma.tenant.create.mockResolvedValue({
+       id: 'tenant_123',
++      slug: 'carlos-silva-3',
++      name: 'Carlos Silva',
++      planId: 'MESA',
++      trialEndsAt: new Date('2026-03-29T00:00:00.000Z'),
+     });
+     prisma.subscription.create.mockResolvedValue({
+       id: 'subscription_123',
++      status: SubscriptionStatus.TRIALING,
+     });
+     prisma.userProfile.create.mockResolvedValue({
+       id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
+-    });
+-    prisma.user.create.mockResolvedValue({
+-      id: 'user_123',
+       tenantId: 'tenant_123',
+       name: 'Carlos Silva',
+-      email: 'carlos@example.com',
+       role: UserRole.OWNER,
+     });
+     supabaseAuthService.createUser.mockResolvedValue({
+       id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
+     });
+-    jwtService.sign.mockReturnValue('token_123');
+ 
+     await expect(
+       service.register({
+@@ -107,16 +87,34 @@ describe('AuthService', () => {
+         planId: 'MESA',
+       }),
+     ).resolves.toEqual({
+-      accessToken: 'token_123',
++      authProvider: 'supabase',
+       user: {
+-        id: 'user_123',
++        id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
+         tenantId: 'tenant_123',
+         name: 'Carlos Silva',
+         email: 'carlos@example.com',
+         role: UserRole.OWNER,
+       },
++      tenant: {
++        id: 'tenant_123',
++        slug: 'carlos-silva-3',
++        name: 'Carlos Silva',
++        planId: 'MESA',
++        trialEndsAt: new Date('2026-03-29T00:00:00.000Z'),
++      },
++      subscription: {
++        status: SubscriptionStatus.TRIALING,
++      },
+     });
+ 
++    expect(supabaseAuthService.createUser).toHaveBeenCalledWith({
++      email: 'carlos@example.com',
++      password: 'demo123',
++      name: 'Carlos Silva',
++      role: UserRole.OWNER,
++      tenantName: 'Carlos Silva',
++      tenantSlug: 'carlos-silva-3',
++    });
+     expect(prisma.tenant.findMany).toHaveBeenCalledWith({
+       where: { slug: { startsWith: 'carlos-silva' } },
+       select: { slug: true },
+@@ -132,13 +130,9 @@ describe('AuthService', () => {
+   });
+ 
+   it('rejects an explicit tenant slug that is already in use', async () => {
+-    prisma.user.findUnique.mockResolvedValue(null);
+     prisma.tenant.findUnique.mockResolvedValue({
+       id: 'tenant_existing',
+     });
+-    supabaseAuthService.createUser.mockResolvedValue({
+-      id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
+-    });
+ 
+     await expect(
+       service.register({
+@@ -150,27 +144,18 @@ describe('AuthService', () => {
+       }),
+     ).rejects.toBeInstanceOf(ConflictException);
+ 
++    expect(supabaseAuthService.createUser).not.toHaveBeenCalled();
+     expect(prisma.$transaction).not.toHaveBeenCalled();
+   });
+ 
+-  it('falls back to legacy registration when Supabase Admin is not configured', async () => {
+-    supabaseAuthService.isAdminConfigured.mockReturnValue(false);
+-    prisma.user.findUnique.mockResolvedValue(null);
++  it('rolls back the Supabase user when the database transaction fails', async () => {
++    const transactionError = new Error('database write failed');
++
+     prisma.tenant.findMany.mockResolvedValue([]);
+-    prisma.tenant.create.mockResolvedValue({
+-      id: 'tenant_123',
+-    });
+-    prisma.subscription.create.mockResolvedValue({
+-      id: 'subscription_123',
+-    });
+-    prisma.user.create.mockResolvedValue({
+-      id: 'user_123',
+-      tenantId: 'tenant_123',
+-      name: 'Carlos Silva',
+-      email: 'carlos@example.com',
+-      role: UserRole.OWNER,
++    prisma.$transaction.mockRejectedValue(transactionError);
++    supabaseAuthService.createUser.mockResolvedValue({
++      id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
+     });
+-    jwtService.sign.mockReturnValue('token_123');
+ 
+     await expect(
+       service.register({
+@@ -179,19 +164,54 @@ describe('AuthService', () => {
+         password: 'demo123',
+         planId: 'MESA',
+       }),
+-    ).resolves.toEqual({
+-      accessToken: 'token_123',
+-      user: {
+-        id: 'user_123',
++    ).rejects.toThrow(transactionError);
++
++    expect(supabaseAuthService.deleteUser).toHaveBeenCalledWith(
++      '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
++    );
++  });
++
++  it('returns the authenticated Supabase profile in getMe', async () => {
++    prisma.userProfile.findUnique.mockResolvedValue({
++      id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
++      tenantId: 'tenant_123',
++      name: 'Carlos Silva',
++      role: UserRole.OWNER,
++      createdAt: new Date('2026-03-15T00:00:00.000Z'),
++      updatedAt: new Date('2026-03-15T00:00:00.000Z'),
++    });
++
++    await expect(
++      service.getMe({
++        userId: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
+         tenantId: 'tenant_123',
+-        name: 'Carlos Silva',
+         email: 'carlos@example.com',
+         role: UserRole.OWNER,
+-      },
++        authProvider: 'supabase',
++      }),
++    ).resolves.toEqual({
++      id: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
++      tenantId: 'tenant_123',
++      name: 'Carlos Silva',
++      email: 'carlos@example.com',
++      role: UserRole.OWNER,
++      createdAt: new Date('2026-03-15T00:00:00.000Z'),
++      updatedAt: new Date('2026-03-15T00:00:00.000Z'),
++      authProvider: 'supabase',
+     });
++  });
+ 
+-    expect(supabaseAuthService.createUser).not.toHaveBeenCalled();
+-    expect(prisma.userProfile.create).not.toHaveBeenCalled();
+-    expect(supabaseAuthService.deleteUser).not.toHaveBeenCalled();
++  it('rejects getMe when the Supabase user has no internal profile', async () => {
++    prisma.userProfile.findUnique.mockResolvedValue(null);
++
++    await expect(
++      service.getMe({
++        userId: '0f0d6f8f-b3d1-4cb2-8d18-10e2ef2c4d8e',
++        tenantId: 'tenant_123',
++        email: 'carlos@example.com',
++        role: UserRole.OWNER,
++        authProvider: 'supabase',
++      }),
++    ).rejects.toBeInstanceOf(UnauthorizedException);
+   });
+ });
+diff --git a/apps/api/src/modules/auth/auth.service.ts b/apps/api/src/modules/auth/auth.service.ts
+index da4868b..d5e182d 100644
+--- a/apps/api/src/modules/auth/auth.service.ts
++++ b/apps/api/src/modules/auth/auth.service.ts
+@@ -2,28 +2,20 @@ import {
+   BadRequestException,
+   ConflictException,
+   Injectable,
+-  Logger,
+   UnauthorizedException,
+ } from '@nestjs/common';
+-import { JwtService } from '@nestjs/jwt';
+-import { SubscriptionStatus, User, UserRole } from '@prisma/client';
+-import { compare, hash } from 'bcryptjs';
++import { SubscriptionStatus, UserRole } from '@prisma/client';
+ import { CurrentUserData } from '../../common/types/current-user.type';
+-import { JwtPayload } from '../../common/types/jwt-payload.type';
+ import { PLAN_FEATURES } from '../../common/utils/plan-features';
+ import { slugify } from '../../common/utils/slugify';
+ import { PrismaService } from '../../prisma/prisma.service';
+-import { LoginDto } from './dto/login.dto';
+ import { RegisterDto } from './dto/register.dto';
+ import { SupabaseAuthService } from './supabase-auth.service';
+ 
+ @Injectable()
+ export class AuthService {
+-  private readonly logger = new Logger(AuthService.name);
+-
+   constructor(
+     private readonly prisma: PrismaService,
+-    private readonly jwtService: JwtService,
+     private readonly supabaseAuthService: SupabaseAuthService,
+   ) {}
+ 
+@@ -34,14 +26,6 @@ export class AuthService {
+     }
+ 
+     const email = dto.email.trim().toLowerCase();
+-    const existingUser = await this.prisma.user.findUnique({
+-      where: { email },
+-    });
+-
+-    if (existingUser) {
+-      throw new ConflictException('An account with this email already exists.');
+-    }
+-
+     const plan = PLAN_FEATURES[dto.planId];
+     if (!plan) {
+       throw new BadRequestException('Invalid plan.');
+@@ -53,31 +37,20 @@ export class AuthService {
+       requestedTenantSlug: dto.tenantSlug?.trim(),
+       email,
+     });
+-    const passwordHash = await hash(dto.password, 10);
+     const trialEndsAt = new Date();
+     trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+ 
+-    const shouldProvisionSupabaseUser =
+-      this.supabaseAuthService.isAdminConfigured();
+-    const authUser = shouldProvisionSupabaseUser
+-      ? await this.supabaseAuthService.createUser({
+-          email,
+-          password: dto.password,
+-          name: ownerName,
+-          role: UserRole.OWNER,
+-          tenantName,
+-          tenantSlug,
+-        })
+-      : null;
+-
+-    if (!shouldProvisionSupabaseUser) {
+-      this.logger.warn(
+-        'Supabase Admin API is not configured. Registering a legacy-only account until the migration environment is complete.',
+-      );
+-    }
++    const authUser = await this.supabaseAuthService.createUser({
++      email,
++      password: dto.password,
++      name: ownerName,
++      role: UserRole.OWNER,
++      tenantName,
++      tenantSlug,
++    });
+ 
+     try {
+-      const user = await this.prisma.$transaction(async (tx) => {
++      const createdAccount = await this.prisma.$transaction(async (tx) => {
+         const tenant = await tx.tenant.create({
+           data: {
+             slug: tenantSlug,
+@@ -97,114 +70,70 @@ export class AuthService {
+           },
+         });
+ 
+-        if (authUser) {
+-          await tx.userProfile.create({
+-            data: {
+-              id: authUser.id,
+-              tenantId: tenant.id,
+-              name: ownerName,
+-              role: UserRole.OWNER,
+-            },
+-          });
+-        }
+-
+-        return tx.user.create({
++        const userProfile = await tx.userProfile.create({
+           data: {
++            id: authUser.id,
+             tenantId: tenant.id,
+             name: ownerName,
+-            email,
+-            passwordHash,
+             role: UserRole.OWNER,
+           },
+         });
++
++        return {
++          tenant,
++          userProfile,
++        };
+       });
+ 
+-      return this.buildAuthResponse(user);
++      return {
++        authProvider: 'supabase' as const,
++        user: {
++          id: createdAccount.userProfile.id,
++          tenantId: createdAccount.userProfile.tenantId,
++          name: createdAccount.userProfile.name,
++          email,
++          role: createdAccount.userProfile.role,
++        },
++        tenant: {
++          id: createdAccount.tenant.id,
++          slug: createdAccount.tenant.slug,
++          name: createdAccount.tenant.name,
++          planId: createdAccount.tenant.planId,
++          trialEndsAt: createdAccount.tenant.trialEndsAt,
++        },
++        subscription: {
++          status: SubscriptionStatus.TRIALING,
++        },
++      };
+     } catch (error) {
+-      if (authUser) {
+-        await this.supabaseAuthService.deleteUser(authUser.id);
+-      }
++      await this.supabaseAuthService.deleteUser(authUser.id);
+       throw error;
+     }
+   }
+ 
+-  async login(dto: LoginDto) {
+-    const email = dto.email.trim().toLowerCase();
+-    const user = await this.prisma.user.findUnique({
+-      where: { email },
+-    });
+-
+-    if (!user) {
+-      throw new UnauthorizedException('Invalid credentials.');
+-    }
+-
+-    const passwordMatches = await compare(dto.password, user.passwordHash);
+-    if (!passwordMatches) {
+-      throw new UnauthorizedException('Invalid credentials.');
+-    }
+-
+-    return this.buildAuthResponse(user);
+-  }
+-
+   async getMe(currentUser: CurrentUserData) {
+-    if (currentUser.authProvider === 'supabase') {
+-      const profile = await this.prisma.userProfile.findUnique({
+-        where: { id: currentUser.userId },
+-        select: {
+-          id: true,
+-          tenantId: true,
+-          name: true,
+-          role: true,
+-          createdAt: true,
+-          updatedAt: true,
+-        },
+-      });
+-
+-      if (!profile) {
+-        throw new UnauthorizedException(
+-          'Authenticated Supabase user profile was not found.',
+-        );
+-      }
+-
+-      return {
+-        ...profile,
+-        email: currentUser.email,
+-      };
+-    }
+-
+-    return this.prisma.user.findUniqueOrThrow({
++    const profile = await this.prisma.userProfile.findUnique({
+       where: { id: currentUser.userId },
+       select: {
+         id: true,
+         tenantId: true,
+         name: true,
+-        email: true,
+         role: true,
+         createdAt: true,
+         updatedAt: true,
+       },
+     });
+-  }
+ 
+-  private buildAuthResponse(user: User) {
+-    const payload: JwtPayload = {
+-      sub: user.id,
+-      userId: user.id,
+-      tenantId: user.tenantId,
+-      email: user.email,
+-      role: user.role,
+-      authProvider: 'legacy',
+-    };
++    if (!profile) {
++      throw new UnauthorizedException(
++        'Authenticated Supabase user profile was not found.',
++      );
++    }
+ 
+     return {
+-      accessToken: this.jwtService.sign(payload),
+-      user: {
+-        id: user.id,
+-        tenantId: user.tenantId,
+-        name: user.name,
+-        email: user.email,
+-        role: user.role,
+-      },
++      ...profile,
++      email: currentUser.email,
++      authProvider: currentUser.authProvider,
+     };
+   }
+ 
+diff --git a/apps/api/src/modules/auth/dto/login.dto.ts b/apps/api/src/modules/auth/dto/login.dto.ts
+deleted file mode 100644
+index a4a3f12..0000000
+--- a/apps/api/src/modules/auth/dto/login.dto.ts
++++ /dev/null
+@@ -1,17 +0,0 @@
+-import { ApiProperty } from '@nestjs/swagger';
+-import { Transform } from 'class-transformer';
+-import { IsEmail, IsString, MinLength } from 'class-validator';
+-
+-export class LoginDto {
+-  @ApiProperty({ example: 'owner@restaurant.com' })
+-  @Transform(({ value }: { value: unknown }) =>
+-    typeof value === 'string' ? value.trim() : value,
+-  )
+-  @IsEmail()
+-  email!: string;
+-
+-  @ApiProperty({ minLength: 6, example: 'secret123' })
+-  @IsString()
+-  @MinLength(6)
+-  password!: string;
+-}
+diff --git a/apps/api/src/modules/auth/guards/jwt-auth.guard.ts b/apps/api/src/modules/auth/guards/jwt-auth.guard.ts
+index d4433cd..fb4a180 100644
+--- a/apps/api/src/modules/auth/guards/jwt-auth.guard.ts
++++ b/apps/api/src/modules/auth/guards/jwt-auth.guard.ts
+@@ -4,16 +4,13 @@ import {
+   Injectable,
+   UnauthorizedException,
+ } from '@nestjs/common';
+-import { JwtService } from '@nestjs/jwt';
+ import { PrismaService } from '../../../prisma/prisma.service';
+ import { CurrentUserData } from '../../../common/types/current-user.type';
+-import { JwtPayload } from '../../../common/types/jwt-payload.type';
+ import { SupabaseAuthService } from '../supabase-auth.service';
+ 
+ @Injectable()
+ export class JwtAuthGuard implements CanActivate {
+   constructor(
+-    private readonly jwtService: JwtService,
+     private readonly prisma: PrismaService,
+     private readonly supabaseAuthService: SupabaseAuthService,
+   ) {}
+@@ -29,52 +26,39 @@ export class JwtAuthGuard implements CanActivate {
+       throw new UnauthorizedException('Missing bearer token.');
+     }
+ 
+-    const supabaseUser = await this.supabaseAuthService.getUserFromAccessToken(
+-      token,
+-    );
++    const supabaseUser =
++      await this.supabaseAuthService.getUserFromAccessToken(token);
+ 
+-    if (supabaseUser) {
+-      const profile = await this.prisma.userProfile.findUnique({
+-        where: { id: supabaseUser.id },
+-        select: {
+-          id: true,
+-          tenantId: true,
+-          role: true,
+-        },
+-      });
+-
+-      if (!profile || !supabaseUser.email) {
+-        throw new UnauthorizedException(
+-          'Authenticated Supabase user is missing an application profile.',
+-        );
+-      }
++    if (!supabaseUser?.email) {
++      throw new UnauthorizedException(
++        'Invalid or expired Supabase access token.',
++      );
++    }
+ 
+-      request.user = {
+-        userId: profile.id,
+-        tenantId: profile.tenantId,
+-        email: supabaseUser.email,
+-        role: profile.role,
+-        authProvider: 'supabase',
+-      };
++    const profile = await this.prisma.userProfile.findUnique({
++      where: { id: supabaseUser.id },
++      select: {
++        id: true,
++        tenantId: true,
++        role: true,
++      },
++    });
+ 
+-      return true;
++    if (!profile) {
++      throw new UnauthorizedException(
++        'Authenticated Supabase user does not have an application profile.',
++      );
+     }
+ 
+-    try {
+-      const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
++    request.user = {
++      userId: profile.id,
++      tenantId: profile.tenantId,
++      email: supabaseUser.email,
++      role: profile.role,
++      authProvider: 'supabase',
++    };
+ 
+-      request.user = {
+-        userId: payload.sub,
+-        tenantId: payload.tenantId,
+-        email: payload.email,
+-        role: payload.role,
+-        authProvider: 'legacy',
+-      };
+-
+-      return true;
+-    } catch {
+-      throw new UnauthorizedException('Invalid or expired access token.');
+-    }
++    return true;
+   }
+ 
+   private extractBearerToken(authorizationHeader?: string) {
+diff --git a/apps/api/src/modules/auth/strategies/jwt.strategy.ts b/apps/api/src/modules/auth/strategies/jwt.strategy.ts
+deleted file mode 100644
+index 902a2b0..0000000
+--- a/apps/api/src/modules/auth/strategies/jwt.strategy.ts
++++ /dev/null
+@@ -1,25 +0,0 @@
+-import { Injectable } from '@nestjs/common';
+-import { ConfigService } from '@nestjs/config';
+-import { PassportStrategy } from '@nestjs/passport';
+-import { ExtractJwt, Strategy } from 'passport-jwt';
+-import { JwtPayload } from '../../../common/types/jwt-payload.type';
+-
+-@Injectable()
+-export class JwtStrategy extends PassportStrategy(Strategy) {
+-  constructor(configService: ConfigService) {
+-    super({
+-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+-      ignoreExpiration: false,
+-      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
+-    });
+-  }
+-
+-  validate(payload: JwtPayload) {
+-    return {
+-      userId: payload.sub,
+-      tenantId: payload.tenantId,
+-      email: payload.email,
+-      role: payload.role,
+-    };
+-  }
+-}
+diff --git a/apps/api/src/modules/auth/supabase-auth.service.ts b/apps/api/src/modules/auth/supabase-auth.service.ts
+index afb8d5f..1910afb 100644
+--- a/apps/api/src/modules/auth/supabase-auth.service.ts
++++ b/apps/api/src/modules/auth/supabase-auth.service.ts
+@@ -31,22 +31,11 @@ export class SupabaseAuthService {
+ 
+   constructor(private readonly configService: ConfigService) {}
+ 
+-  isAdminConfigured() {
+-    return Boolean(
+-      this.getSupabaseUrl() &&
+-        this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim(),
+-    );
+-  }
+-
+-  isAuthVerificationConfigured() {
+-    return Boolean(this.getSupabaseUrl() && this.getSupabaseApiKey());
+-  }
+-
+   async createUser(input: CreateSupabaseUserInput) {
+     const { data, error } = await this.getAdminClient().auth.admin.createUser({
+       email: input.email,
+       password: input.password,
+-      // Keep new accounts usable during the migration window.
++      // Keep newly provisioned accounts able to sign in immediately.
+       email_confirm: true,
+       user_metadata: {
+         name: input.name,
+@@ -82,11 +71,8 @@ export class SupabaseAuthService {
+   }
+ 
+   async getUserFromAccessToken(accessToken: string): Promise<User | null> {
+-    if (!this.isAuthVerificationConfigured()) {
+-      return null;
+-    }
+-
+-    const { data, error } = await this.getAuthClient().auth.getUser(accessToken);
++    const { data, error } =
++      await this.getAuthClient().auth.getUser(accessToken);
+ 
+     if (error || !data.user) {
+       return null;
+@@ -101,7 +87,9 @@ export class SupabaseAuthService {
+         (error.status === 409 || error.status === 422)) ||
+       /already been registered|already exists|duplicate/i.test(error.message)
+     ) {
+-      return new ConflictException('An account with this email already exists.');
++      return new ConflictException(
++        'An account with this email already exists.',
++      );
+     }
+ 
+     this.logger.error(`Supabase Auth error: ${error.message}`);
+@@ -139,13 +127,10 @@ export class SupabaseAuthService {
+         'SUPABASE_URL',
+         'Supabase URL is not configured.',
+       );
+-      const apiKey = this.getSupabaseApiKey();
+-
+-      if (!apiKey) {
+-        throw new InternalServerErrorException(
+-          'Supabase anon or service role key is not configured.',
+-        );
+-      }
++      const apiKey = this.getRequiredConfigValue(
++        'SUPABASE_ANON_KEY',
++        'Supabase anon key is not configured.',
++      );
+ 
+       this.authClient = createClient(supabaseUrl, apiKey, {
+         auth: {
+@@ -158,17 +143,6 @@ export class SupabaseAuthService {
+     return this.authClient;
+   }
+ 
+-  private getSupabaseUrl() {
+-    return this.configService.get<string>('SUPABASE_URL')?.trim();
+-  }
+-
+-  private getSupabaseApiKey() {
+-    return (
+-      this.configService.get<string>('SUPABASE_ANON_KEY')?.trim() ||
+-      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim()
+-    );
+-  }
+-
+   private getRequiredConfigValue(key: string, errorMessage: string) {
+     const value = this.configService.get<string>(key)?.trim();
+ 
+diff --git a/apps/api/src/modules/billing/billing.module.ts b/apps/api/src/modules/billing/billing.module.ts
+index 7d92152..9886507 100644
+--- a/apps/api/src/modules/billing/billing.module.ts
++++ b/apps/api/src/modules/billing/billing.module.ts
+@@ -1,8 +1,10 @@
+ import { Module } from '@nestjs/common';
++import { AuthModule } from '../auth/auth.module';
+ import { BillingController } from './billing.controller';
+ import { BillingService } from './billing.service';
+ 
+ @Module({
++  imports: [AuthModule],
+   controllers: [BillingController],
+   providers: [BillingService],
+ })
+diff --git a/apps/api/src/modules/categories/categories.module.ts b/apps/api/src/modules/categories/categories.module.ts
+index 47daf6d..d987883 100644
+--- a/apps/api/src/modules/categories/categories.module.ts
++++ b/apps/api/src/modules/categories/categories.module.ts
+@@ -1,8 +1,10 @@
+ import { Module } from '@nestjs/common';
++import { AuthModule } from '../auth/auth.module';
+ import { CategoriesController } from './categories.controller';
+ import { CategoriesService } from './categories.service';
+ 
+ @Module({
++  imports: [AuthModule],
+   controllers: [CategoriesController],
+   providers: [CategoriesService],
+ })
+diff --git a/apps/api/src/modules/dashboard/dashboard.module.ts b/apps/api/src/modules/dashboard/dashboard.module.ts
+index c4a4a45..620e878 100644
+--- a/apps/api/src/modules/dashboard/dashboard.module.ts
++++ b/apps/api/src/modules/dashboard/dashboard.module.ts
+@@ -1,8 +1,10 @@
+ import { Module } from '@nestjs/common';
++import { AuthModule } from '../auth/auth.module';
+ import { DashboardController } from './dashboard.controller';
+ import { DashboardService } from './dashboard.service';
+ 
+ @Module({
++  imports: [AuthModule],
+   controllers: [DashboardController],
+   providers: [DashboardService],
+ })
+diff --git a/apps/api/src/modules/menu-items/menu-items.module.ts b/apps/api/src/modules/menu-items/menu-items.module.ts
+index b0c8514..8be10cb 100644
+--- a/apps/api/src/modules/menu-items/menu-items.module.ts
++++ b/apps/api/src/modules/menu-items/menu-items.module.ts
+@@ -1,8 +1,10 @@
+ import { Module } from '@nestjs/common';
++import { AuthModule } from '../auth/auth.module';
+ import { MenuItemsController } from './menu-items.controller';
+ import { MenuItemsService } from './menu-items.service';
+ 
+ @Module({
++  imports: [AuthModule],
+   controllers: [MenuItemsController],
+   providers: [MenuItemsService],
+ })
+diff --git a/apps/api/src/modules/storage/storage.module.ts b/apps/api/src/modules/storage/storage.module.ts
+index 2b02f69..2b923cb 100644
+--- a/apps/api/src/modules/storage/storage.module.ts
++++ b/apps/api/src/modules/storage/storage.module.ts
+@@ -1,8 +1,10 @@
+ import { Module } from '@nestjs/common';
++import { AuthModule } from '../auth/auth.module';
+ import { StorageController } from './storage.controller';
+ import { StorageService } from './storage.service';
+ 
+ @Module({
++  imports: [AuthModule],
+   controllers: [StorageController],
+   providers: [StorageService],
+ })
+diff --git a/apps/api/src/modules/tables/tables.module.ts b/apps/api/src/modules/tables/tables.module.ts
+index 73060ef..4335fa9 100644
+--- a/apps/api/src/modules/tables/tables.module.ts
++++ b/apps/api/src/modules/tables/tables.module.ts
+@@ -1,8 +1,10 @@
+ import { Module } from '@nestjs/common';
++import { AuthModule } from '../auth/auth.module';
+ import { TablesController } from './tables.controller';
+ import { TablesService } from './tables.service';
+ 
+ @Module({
++  imports: [AuthModule],
+   controllers: [TablesController],
+   providers: [TablesService],
+ })
+diff --git a/apps/api/src/modules/tenants/tenants.module.ts b/apps/api/src/modules/tenants/tenants.module.ts
+index 22f3efd..d35ea4f 100644
+--- a/apps/api/src/modules/tenants/tenants.module.ts
++++ b/apps/api/src/modules/tenants/tenants.module.ts
+@@ -1,8 +1,10 @@
+ import { Module } from '@nestjs/common';
++import { AuthModule } from '../auth/auth.module';
+ import { TenantsController } from './tenants.controller';
+ import { TenantsService } from './tenants.service';
+ 
+ @Module({
++  imports: [AuthModule],
+   controllers: [TenantsController],
+   providers: [TenantsService],
+ })
+diff --git a/apps/api/test/app.e2e-spec.ts b/apps/api/test/app.e2e-spec.ts
+index 7ef5e9d..519795b 100644
+--- a/apps/api/test/app.e2e-spec.ts
++++ b/apps/api/test/app.e2e-spec.ts
+@@ -10,10 +10,12 @@ describe('HealthController (e2e)', () => {
+       process.env.DATABASE_URL ??
+       'postgresql://postgres:postgres@localhost:5432/comanda_flow';
+     process.env.DIRECT_URL = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+-    process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
+-    process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '7d';
+     process.env.FRONTEND_URL =
+       process.env.FRONTEND_URL ?? 'http://localhost:4173';
++    process.env.SUPABASE_URL =
++      process.env.SUPABASE_URL ?? 'https://example.supabase.co';
++    process.env.SUPABASE_ANON_KEY =
++      process.env.SUPABASE_ANON_KEY ?? 'test-anon-key';
+ 
+     const { AppModule } = await import('../src/app.module');
+ 
+diff --git a/package-lock.json b/package-lock.json
+index aed0d55..2564b36 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -19,17 +19,12 @@
+         "@nestjs/common": "^10.4.15",
+         "@nestjs/config": "^3.3.0",
+         "@nestjs/core": "^10.4.15",
+-        "@nestjs/jwt": "^10.2.0",
+-        "@nestjs/passport": "^10.0.3",
+         "@nestjs/platform-express": "^10.4.15",
+         "@nestjs/swagger": "^7.4.2",
+         "@prisma/client": "^5.22.0",
+         "@supabase/supabase-js": "2.57.4",
+-        "bcryptjs": "^2.4.3",
+         "class-transformer": "^0.5.1",
+         "class-validator": "^0.14.1",
+-        "passport": "^0.7.0",
+-        "passport-jwt": "^4.0.1",
+         "reflect-metadata": "^0.2.2",
+         "rxjs": "^7.8.1",
+         "stripe": "^18.1.1",
+@@ -44,7 +39,6 @@
+         "@types/express": "^5.0.0",
+         "@types/jest": "^29.5.14",
+         "@types/node": "^18.19.76",
+-        "@types/passport-jwt": "^4.0.1",
+         "@types/supertest": "^6.0.2",
+         "eslint": "^9.18.0",
+         "eslint-config-prettier": "^10.0.1",
+@@ -2658,17 +2652,6 @@
+         }
+       }
+     },
+-    "node_modules/@nestjs/jwt": {
+-      "version": "10.2.0",
+-      "license": "MIT",
+-      "dependencies": {
+-        "@types/jsonwebtoken": "9.0.5",
+-        "jsonwebtoken": "9.0.2"
+-      },
+-      "peerDependencies": {
+-        "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0"
+-      }
+-    },
+     "node_modules/@nestjs/mapped-types": {
+       "version": "2.0.5",
+       "license": "MIT",
+@@ -2687,14 +2670,6 @@
+         }
+       }
+     },
+-    "node_modules/@nestjs/passport": {
+-      "version": "10.0.3",
+-      "license": "MIT",
+-      "peerDependencies": {
+-        "@nestjs/common": "^8.0.0 || ^9.0.0 || ^10.0.0",
+-        "passport": "^0.4.0 || ^0.5.0 || ^0.6.0 || ^0.7.0"
+-      }
+-    },
+     "node_modules/@nestjs/platform-express": {
+       "version": "10.4.22",
+       "license": "MIT",
+@@ -5242,13 +5217,6 @@
+       "dev": true,
+       "license": "MIT"
+     },
+-    "node_modules/@types/jsonwebtoken": {
+-      "version": "9.0.5",
+-      "license": "MIT",
+-      "dependencies": {
+-        "@types/node": "*"
+-      }
+-    },
+     "node_modules/@types/methods": {
+       "version": "1.1.4",
+       "dev": true,
+@@ -5261,32 +5229,6 @@
+         "undici-types": "~5.26.4"
+       }
+     },
+-    "node_modules/@types/passport": {
+-      "version": "1.0.17",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@types/express": "*"
+-      }
+-    },
+-    "node_modules/@types/passport-jwt": {
+-      "version": "4.0.1",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@types/jsonwebtoken": "*",
+-        "@types/passport-strategy": "*"
+-      }
+-    },
+-    "node_modules/@types/passport-strategy": {
+-      "version": "0.2.38",
+-      "dev": true,
+-      "license": "MIT",
+-      "dependencies": {
+-        "@types/express": "*",
+-        "@types/passport": "*"
+-      }
+-    },
+     "node_modules/@types/phoenix": {
+       "version": "1.6.7",
+       "license": "MIT"
+@@ -6349,10 +6291,6 @@
+         "node": ">=6.0.0"
+       }
+     },
+-    "node_modules/bcryptjs": {
+-      "version": "2.4.3",
+-      "license": "MIT"
+-    },
+     "node_modules/binary-extensions": {
+       "version": "2.3.0",
+       "license": "MIT",
+@@ -6512,10 +6450,6 @@
+         "ieee754": "^1.1.13"
+       }
+     },
+-    "node_modules/buffer-equal-constant-time": {
+-      "version": "1.0.1",
+-      "license": "BSD-3-Clause"
+-    },
+     "node_modules/buffer-from": {
+       "version": "1.1.2",
+       "license": "MIT"
+@@ -7573,13 +7507,6 @@
+       "dev": true,
+       "license": "MIT"
+     },
+-    "node_modules/ecdsa-sig-formatter": {
+-      "version": "1.0.11",
+-      "license": "Apache-2.0",
+-      "dependencies": {
+-        "safe-buffer": "^5.0.1"
+-      }
+-    },
+     "node_modules/ee-first": {
+       "version": "1.1.1",
+       "license": "MIT"
+@@ -11740,43 +11667,6 @@
+         "graceful-fs": "^4.1.6"
+       }
+     },
+-    "node_modules/jsonwebtoken": {
+-      "version": "9.0.2",
+-      "license": "MIT",
+-      "dependencies": {
+-        "jws": "^3.2.2",
+-        "lodash.includes": "^4.3.0",
+-        "lodash.isboolean": "^3.0.3",
+-        "lodash.isinteger": "^4.0.4",
+-        "lodash.isnumber": "^3.0.3",
+-        "lodash.isplainobject": "^4.0.6",
+-        "lodash.isstring": "^4.0.1",
+-        "lodash.once": "^4.0.0",
+-        "ms": "^2.1.1",
+-        "semver": "^7.5.4"
+-      },
+-      "engines": {
+-        "node": ">=12",
+-        "npm": ">=6"
+-      }
+-    },
+-    "node_modules/jwa": {
+-      "version": "1.4.2",
+-      "license": "MIT",
+-      "dependencies": {
+-        "buffer-equal-constant-time": "^1.0.1",
+-        "ecdsa-sig-formatter": "1.0.11",
+-        "safe-buffer": "^5.0.1"
+-      }
+-    },
+-    "node_modules/jws": {
+-      "version": "3.2.3",
+-      "license": "MIT",
+-      "dependencies": {
+-        "jwa": "^1.4.2",
+-        "safe-buffer": "^5.0.1"
+-      }
+-    },
+     "node_modules/keyv": {
+       "version": "4.5.4",
+       "dev": true,
+@@ -11861,30 +11751,6 @@
+       "version": "4.17.23",
+       "license": "MIT"
+     },
+-    "node_modules/lodash.includes": {
+-      "version": "4.3.0",
+-      "license": "MIT"
+-    },
+-    "node_modules/lodash.isboolean": {
+-      "version": "3.0.3",
+-      "license": "MIT"
+-    },
+-    "node_modules/lodash.isinteger": {
+-      "version": "4.0.4",
+-      "license": "MIT"
+-    },
+-    "node_modules/lodash.isnumber": {
+-      "version": "3.0.3",
+-      "license": "MIT"
+-    },
+-    "node_modules/lodash.isplainobject": {
+-      "version": "4.0.6",
+-      "license": "MIT"
+-    },
+-    "node_modules/lodash.isstring": {
+-      "version": "4.0.1",
+-      "license": "MIT"
+-    },
+     "node_modules/lodash.memoize": {
+       "version": "4.1.2",
+       "dev": true,
+@@ -11895,10 +11761,6 @@
+       "dev": true,
+       "license": "MIT"
+     },
+-    "node_modules/lodash.once": {
+-      "version": "4.1.1",
+-      "license": "MIT"
+-    },
+     "node_modules/log-symbols": {
+       "version": "4.1.0",
+       "dev": true,
+@@ -12492,36 +12354,6 @@
+         "node": ">= 0.8"
+       }
+     },
+-    "node_modules/passport": {
+-      "version": "0.7.0",
+-      "license": "MIT",
+-      "dependencies": {
+-        "passport-strategy": "1.x.x",
+-        "pause": "0.0.1",
+-        "utils-merge": "^1.0.1"
+-      },
+-      "engines": {
+-        "node": ">= 0.4.0"
+-      },
+-      "funding": {
+-        "type": "github",
+-        "url": "https://github.com/sponsors/jaredhanson"
+-      }
+-    },
+-    "node_modules/passport-jwt": {
+-      "version": "4.0.1",
+-      "license": "MIT",
+-      "dependencies": {
+-        "jsonwebtoken": "^9.0.0",
+-        "passport-strategy": "^1.0.0"
+-      }
+-    },
+-    "node_modules/passport-strategy": {
+-      "version": "1.0.0",
+-      "engines": {
+-        "node": ">= 0.4.0"
+-      }
+-    },
+     "node_modules/path-exists": {
+       "version": "4.0.0",
+       "dev": true,
+@@ -12595,9 +12427,6 @@
+         "node": ">= 14.16"
+       }
+     },
+-    "node_modules/pause": {
+-      "version": "0.0.1"
+-    },
+     "node_modules/picocolors": {
+       "version": "1.1.1",
+       "license": "ISC"
+@@ -13594,6 +13423,7 @@
+     },
+     "node_modules/semver": {
+       "version": "7.7.4",
++      "dev": true,
+       "license": "ISC",
+       "bin": {
+         "semver": "bin/semver.js"
