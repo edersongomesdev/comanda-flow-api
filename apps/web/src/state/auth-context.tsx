@@ -178,9 +178,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         persistUser(nextUser);
       } catch (supabaseError) {
         await signOutSupabaseSession();
+        try {
+          const session = await loginRequest(email, password);
+          persistLegacySession(session.accessToken, session.user);
+        } catch (legacyError) {
+          if (legacyError instanceof HttpError && legacyError.status === 410) {
+            throw new Error(
+              "Contas antigas ainda precisam ser migradas para o Supabase antes do login.",
+            );
+          }
 
-        const session = await loginRequest(email, password);
-        persistLegacySession(session.accessToken, session.user);
+          throw legacyError;
+        }
       } finally {
         setIsLoading(false);
       }

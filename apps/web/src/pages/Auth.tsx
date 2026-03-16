@@ -109,7 +109,7 @@ export default function Auth() {
                   Esqueci minha senha
                 </Link>
                 <p className="text-xs text-center text-muted-foreground">
-                  O login agora tenta primeiro o Supabase e cai para o legado so enquanto houver contas antigas sem migracao.
+                  Contas novas entram via Supabase. Contas antigas precisam de migracao enquanto o login legado estiver desativado.
                 </p>
               </form>
             </TabsContent>

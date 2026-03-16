@@ -17,7 +17,7 @@ export interface EnvVariables {
   STRIPE_PRICE_MESA?: string;
   STRIPE_PRICE_PREMIUM?: string;
   SUPABASE_URL: string;
-  SUPABASE_ANON_KEY: string;
+  SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   SUPABASE_STORAGE_BUCKET: string;
 }
@@ -38,6 +38,63 @@ function readOptionalString(env: EnvInput, key: string) {
   return value ? value : undefined;
 }
 
+function readSupabaseProjectRefFromUrl(supabaseUrl: string) {
+  try {
+    const hostname = new URL(supabaseUrl).hostname;
+
+    if (!hostname.endsWith('.supabase.co')) {
+      return undefined;
+    }
+
+    return hostname.slice(0, -'.supabase.co'.length);
+  } catch {
+    return undefined;
+  }
+}
+
+function readSupabaseProjectRefFromJwt(token?: string) {
+  if (!token) {
+    return undefined;
+  }
+
+  const [, payload] = token.split('.');
+
+  if (!payload) {
+    return undefined;
+  }
+
+  try {
+    const decodedPayload = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    ) as { ref?: unknown };
+
+    return typeof decodedPayload.ref === 'string'
+      ? decodedPayload.ref.trim() || undefined
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function assertSupabaseKeyMatchesUrl(
+  keyName: 'SUPABASE_ANON_KEY' | 'SUPABASE_SERVICE_ROLE_KEY',
+  keyValue: string | undefined,
+  supabaseUrl: string,
+) {
+  const urlProjectRef = readSupabaseProjectRefFromUrl(supabaseUrl);
+  const keyProjectRef = readSupabaseProjectRefFromJwt(keyValue);
+
+  if (!urlProjectRef || !keyProjectRef) {
+    return;
+  }
+
+  if (urlProjectRef !== keyProjectRef) {
+    throw new Error(
+      `Environment variable ${keyName} does not match SUPABASE_URL project ref (${urlProjectRef}).`,
+    );
+  }
+}
+
 export function validateEnv(env: EnvInput): EnvVariables {
   const port = Number.parseInt(env.PORT ?? '3001', 10);
 
@@ -51,6 +108,24 @@ export function validateEnv(env: EnvInput): EnvVariables {
       'Environment variable NODE_ENV must be development, test or production.',
     );
   }
+
+  const supabaseUrl = readRequiredString(env, 'SUPABASE_URL');
+  const supabaseAnonKey = readOptionalString(env, 'SUPABASE_ANON_KEY');
+  const supabaseServiceRoleKey = readOptionalString(
+    env,
+    'SUPABASE_SERVICE_ROLE_KEY',
+  );
+
+  assertSupabaseKeyMatchesUrl(
+    'SUPABASE_ANON_KEY',
+    supabaseAnonKey,
+    supabaseUrl,
+  );
+  assertSupabaseKeyMatchesUrl(
+    'SUPABASE_SERVICE_ROLE_KEY',
+    supabaseServiceRoleKey,
+    supabaseUrl,
+  );
 
   return {
     PORT: port,
@@ -73,12 +148,9 @@ export function validateEnv(env: EnvInput): EnvVariables {
     STRIPE_PRICE_PREMIUM:
       readOptionalString(env, 'STRIPE_PRICE_PREMIUM') ??
       readOptionalString(env, 'STRIPE_PRICE_ELITE'),
-    SUPABASE_URL: readRequiredString(env, 'SUPABASE_URL'),
-    SUPABASE_ANON_KEY: readRequiredString(env, 'SUPABASE_ANON_KEY'),
-    SUPABASE_SERVICE_ROLE_KEY: readOptionalString(
-      env,
-      'SUPABASE_SERVICE_ROLE_KEY',
-    ),
+    SUPABASE_URL: supabaseUrl,
+    SUPABASE_ANON_KEY: supabaseAnonKey,
+    SUPABASE_SERVICE_ROLE_KEY: supabaseServiceRoleKey,
     SUPABASE_STORAGE_BUCKET:
       readOptionalString(env, 'SUPABASE_STORAGE_BUCKET') ?? 'menu-assets',
   };

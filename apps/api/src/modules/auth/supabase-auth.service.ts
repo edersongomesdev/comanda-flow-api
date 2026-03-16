@@ -26,6 +26,8 @@ interface CreateSupabaseUserInput {
 
 const SUPABASE_AUTH_ADMIN_UNAVAILABLE_MESSAGE =
   'Supabase Auth administrative operations are unavailable until SUPABASE_SERVICE_ROLE_KEY is configured.';
+const SUPABASE_AUTH_CLIENT_UNAVAILABLE_MESSAGE =
+  'Supabase access token validation is unavailable until SUPABASE_ANON_KEY is configured.';
 
 @Injectable()
 export class SupabaseAuthService {
@@ -39,6 +41,13 @@ export class SupabaseAuthService {
     return Boolean(
       this.configService.get<string>('SUPABASE_URL')?.trim() &&
       this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY')?.trim(),
+    );
+  }
+
+  isAuthClientConfigured() {
+    return Boolean(
+      this.configService.get<string>('SUPABASE_URL')?.trim() &&
+      this.configService.get<string>('SUPABASE_ANON_KEY')?.trim(),
     );
   }
 
@@ -136,6 +145,8 @@ export class SupabaseAuthService {
 
   private getAuthClient() {
     if (!this.authClient) {
+      this.assertAuthClientConfigured();
+
       const supabaseUrl = this.getRequiredConfigValue(
         'SUPABASE_URL',
         'Supabase URL is not configured.',
@@ -161,6 +172,15 @@ export class SupabaseAuthService {
       this.logger.error(SUPABASE_AUTH_ADMIN_UNAVAILABLE_MESSAGE);
       throw new ServiceUnavailableException(
         SUPABASE_AUTH_ADMIN_UNAVAILABLE_MESSAGE,
+      );
+    }
+  }
+
+  private assertAuthClientConfigured() {
+    if (!this.isAuthClientConfigured()) {
+      this.logger.error(SUPABASE_AUTH_CLIENT_UNAVAILABLE_MESSAGE);
+      throw new ServiceUnavailableException(
+        SUPABASE_AUTH_CLIENT_UNAVAILABLE_MESSAGE,
       );
     }
   }

@@ -64,6 +64,10 @@ export class AuthController {
     description:
       'Requires a valid Supabase bearer token and an existing internal userProfile.',
   })
+  @ApiServiceUnavailableResponse({
+    description:
+      'Supabase bearer token validation is unavailable until SUPABASE_ANON_KEY is configured on the backend.',
+  })
   me(@CurrentUser() currentUser: CurrentUserData) {
     return this.authService.getMe(currentUser);
   }

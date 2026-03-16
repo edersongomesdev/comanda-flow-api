@@ -8,7 +8,7 @@ Este arquivo descreve exatamente o que precisa ser levado para um repositorio de
   - `user_profiles` ligada a `auth.users`
   - `POST /auth/register` com dual-write
   - `GET /auth/me` aceitando token Supabase
-  - guard hibrido `supabase | legacy`
+  - `POST /auth/login` descontinuado, sem fallback legado no backend atual
 - O frontend separado usa Vite + React e possui um ponto central de auth/contexto e um cliente HTTP.
 
 ## Ordem Recomendada
@@ -102,7 +102,7 @@ No contexto/global state de auth do frontend separado:
 - login:
   - tentar `supabase.auth.signInWithPassword`
   - depois chamar `/auth/me`
-  - fallback legado temporario se a conta ainda nao existir no Supabase
+  - se a conta ainda nao existir no Supabase, mostrar erro explicando que o backfill de usuarios antigos ainda nao ocorreu
 - logout:
   - `supabase.auth.signOut()`
   - limpar estado local
@@ -204,11 +204,11 @@ Depois do port:
 4. Forgot password envia email com link valido.
 5. Link de reset abre a tela correta do frontend.
 6. Reset salva a nova senha e volta para login.
-7. Usuario legado antigo ainda consegue entrar via fallback enquanto o backfill nao ocorre.
+7. Usuario legado antigo recebe uma mensagem clara dizendo que a conta ainda precisa ser migrada para o Supabase.
 
 ## Debitos Tecnicos Que Ficam Apos O Port
 
-- Remover fallback legado de login depois do backfill de usuarios antigos
+- Criar e executar o backfill de usuarios antigos para o Supabase
 - Remover `email_confirm: true` no cadastro via Admin API
 - Eliminar `passwordHash` e JWT legado no backend
 

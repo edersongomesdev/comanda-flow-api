@@ -4,6 +4,7 @@ import request, { Response } from 'supertest';
 
 describe('HealthController (e2e)', () => {
   let app: INestApplication;
+  const originalSupabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   beforeAll(async () => {
     process.env.DATABASE_URL =
@@ -14,8 +15,7 @@ describe('HealthController (e2e)', () => {
       process.env.FRONTEND_URL ?? 'http://localhost:4173';
     process.env.SUPABASE_URL =
       process.env.SUPABASE_URL ?? 'https://example.supabase.co';
-    process.env.SUPABASE_ANON_KEY =
-      process.env.SUPABASE_ANON_KEY ?? 'test-anon-key';
+    delete process.env.SUPABASE_ANON_KEY;
     process.env.SUPABASE_SERVICE_ROLE_KEY = '';
 
     const { AppModule } = await import('../src/app.module');
@@ -30,6 +30,13 @@ describe('HealthController (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
+
+    if (originalSupabaseAnonKey === undefined) {
+      delete process.env.SUPABASE_ANON_KEY;
+      return;
+    }
+
+    process.env.SUPABASE_ANON_KEY = originalSupabaseAnonKey;
   });
 
   it('/health (GET)', async () => {
@@ -59,6 +66,15 @@ describe('HealthController (e2e)', () => {
     const server = app.getHttpServer() as Parameters<typeof request>[0];
 
     await request(server).get('/auth/me').expect(401);
+  });
+
+  it('/auth/me (GET) returns 503 when Supabase token validation is not configured', async () => {
+    const server = app.getHttpServer() as Parameters<typeof request>[0];
+
+    await request(server)
+      .get('/auth/me')
+      .set('Authorization', 'Bearer test-token')
+      .expect(503);
   });
 
   it('/auth/register (POST) returns 503 when Supabase admin is not configured', async () => {

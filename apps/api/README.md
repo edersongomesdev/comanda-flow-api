@@ -31,7 +31,6 @@ Obrigatórias:
 - `DATABASE_URL`
 - `DIRECT_URL`
 - `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
 
 Obrigatórias apenas para rotas/serviços administrativos:
 
@@ -39,6 +38,12 @@ Obrigatórias apenas para rotas/serviços administrativos:
   - necessária para `POST /auth/register`
   - necessária para signed upload URLs no módulo de storage
   - se ausente, a aplicação sobe normalmente, mas essas rotas respondem `503`
+
+Obrigatórias apenas para rotas que validam bearer token do Supabase:
+
+- `SUPABASE_ANON_KEY`
+  - necessária para `GET /auth/me`
+  - se ausente, a aplicação sobe normalmente, mas rotas protegidas por token Supabase respondem `503`
 
 Opcionais:
 
@@ -85,7 +90,8 @@ O seed mínimo não cria mais login local nem popula a tabela `User`.
 
 - Não configure `JWT_SECRET`: ele não é mais usado.
 - Não exponha `SUPABASE_SERVICE_ROLE_KEY` no frontend.
-- Se `SUPABASE_ANON_KEY` ou `SUPABASE_URL` estiverem ausentes, o bootstrap falha na validação de ambiente antes da API subir.
+- Se `SUPABASE_URL` estiver ausente, o bootstrap falha na validação de ambiente antes da API subir.
+- Se `SUPABASE_ANON_KEY` estiver ausente, a API ainda sobe e responde `GET /health`, mas rotas que validam token Supabase respondem `503`.
 - Se `SUPABASE_SERVICE_ROLE_KEY` estiver ausente, a API ainda sobe e responde `GET /health`, mas `POST /auth/register` e rotas de storage assinadas respondem `503` com mensagem explícita de configuração.
 - `GET /auth/me` responde `401` para token Supabase inválido/expirado e também para usuários sem `userProfile`.
 - Em `NODE_ENV=production`, o Swagger não é exposto. Fora de produção, ele fica em `/docs`.
