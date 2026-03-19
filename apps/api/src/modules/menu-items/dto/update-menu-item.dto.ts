@@ -12,40 +12,68 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { emptyStringToNull, trimStringInput } from '../../../common/utils/dto-transforms';
+import {
+  emptyStringToNull,
+  trimStringInput,
+} from '../../../common/utils/dto-transforms';
 import { UpdateModifierGroupDto } from './update-modifier-group.dto';
 
 export class UpdateMenuItemDto {
-  @ApiPropertyOptional({ example: 'x-bacon' })
+  @ApiPropertyOptional({
+    example: 'x-bacon',
+    description: 'Updated menu item name.',
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
   @IsNotEmpty({ message: 'name should not be empty.' })
-  @MaxLength(120)
+  @MaxLength(120, {
+    message: 'name must be shorter than or equal to 120 characters.',
+  })
   name?: string;
 
-  @ApiPropertyOptional({ example: 'Hamburguer, bacon e cheddar.' })
+  @ApiPropertyOptional({
+    example: 'Hamburguer, bacon e cheddar.',
+    description: 'Updated description. Send null to clear the field.',
+    nullable: true,
+  })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => emptyStringToNull(value))
   @IsString()
-  description?: string;
+  @MaxLength(500, {
+    message: 'description must be shorter than or equal to 500 characters.',
+  })
+  description?: string | null;
 
-  @ApiPropertyOptional({ example: 3290 })
+  @ApiPropertyOptional({
+    example: 3290,
+    description: 'Updated price in cents.',
+  })
   @IsOptional()
-  @IsInt()
-  @Min(0)
+  @IsInt({ message: 'priceCents must be an integer number of cents.' })
+  @Min(0, { message: 'priceCents must not be less than 0.' })
   priceCents?: number;
 
-  @ApiPropertyOptional({ example: 'cat_456' })
+  @ApiPropertyOptional({
+    example: 'cat_456',
+    description:
+      'Updated category id. It must belong to the authenticated tenant.',
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
   @IsNotEmpty({ message: 'categoryId should not be empty.' })
   categoryId?: string;
 
-  @ApiPropertyOptional({ example: 'https://cdn.example.com/burger.jpg' })
+  @ApiPropertyOptional({
+    example: 'https://cdn.example.com/burger.jpg',
+    description:
+      'Updated public image URL. Send null to remove the current image.',
+    nullable: true,
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => emptyStringToNull(value))
-  @IsUrl()
+  @IsUrl({}, { message: 'imageUrl must be a valid URL when provided.' })
   imageUrl?: string | null;
 
   @ApiPropertyOptional({ default: false })
@@ -60,7 +88,7 @@ export class UpdateMenuItemDto {
 
   @ApiPropertyOptional({ type: [UpdateModifierGroupDto] })
   @IsOptional()
-  @IsArray()
+  @IsArray({ message: 'modifierGroups must be an array when provided.' })
   @ValidateNested({ each: true })
   @Type(() => UpdateModifierGroupDto)
   modifierGroups?: UpdateModifierGroupDto[];

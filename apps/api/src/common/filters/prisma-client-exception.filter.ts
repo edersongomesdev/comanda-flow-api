@@ -13,6 +13,19 @@ export class PrismaClientExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
 
     if (exception.code === 'P2002') {
+      const target = this.getUniqueConstraintTarget(exception);
+
+      if (target.includes('tenantId') && target.includes('number')) {
+        response.status(HttpStatus.CONFLICT).json({
+          statusCode: HttpStatus.CONFLICT,
+          message: 'Table number is already in use for this tenant.',
+          error: 'Conflict',
+          code: 'TABLE_NUMBER_CONFLICT',
+          field: 'number',
+        });
+        return;
+      }
+
       response.status(HttpStatus.CONFLICT).json({
         statusCode: HttpStatus.CONFLICT,
         message: 'A unique constraint would be violated by this operation.',
@@ -35,5 +48,24 @@ export class PrismaClientExceptionFilter implements ExceptionFilter {
       message: 'Unexpected database error.',
       error: 'Internal Server Error',
     });
+  }
+
+  private getUniqueConstraintTarget(
+    exception: PrismaClientKnownRequestError,
+  ): string[] {
+    const target = exception.meta?.target;
+
+    if (Array.isArray(target)) {
+      return target.filter(
+        (entry): entry is string =>
+          typeof entry === 'string' && entry.length > 0,
+      );
+    }
+
+    if (typeof target === 'string' && target.length > 0) {
+      return [target];
+    }
+
+    return [];
   }
 }

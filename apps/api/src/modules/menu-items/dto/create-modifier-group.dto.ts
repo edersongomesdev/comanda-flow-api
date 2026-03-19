@@ -12,7 +12,10 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { trimStringInput } from '../../../common/utils/dto-transforms';
+import {
+  emptyStringToNull,
+  trimStringInput,
+} from '../../../common/utils/dto-transforms';
 import { CreateModifierOptionDto } from './create-modifier-option.dto';
 
 export class CreateModifierGroupDto {
@@ -20,14 +23,19 @@ export class CreateModifierGroupDto {
   @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
   @IsNotEmpty({ message: 'name should not be empty.' })
-  @MaxLength(120)
+  @MaxLength(120, {
+    message: 'name must be shorter than or equal to 120 characters.',
+  })
   name!: string;
 
   @ApiPropertyOptional({ example: 'Escolha os extras do lanche.' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => emptyStringToNull(value))
   @IsString()
-  @MaxLength(240)
-  description?: string;
+  @MaxLength(240, {
+    message: 'description must be shorter than or equal to 240 characters.',
+  })
+  description?: string | null;
 
   @ApiPropertyOptional({ example: false, default: false })
   @IsOptional()
@@ -53,8 +61,8 @@ export class CreateModifierGroupDto {
   sortOrder?: number;
 
   @ApiProperty({ type: [CreateModifierOptionDto] })
-  @IsArray()
-  @ArrayMinSize(1)
+  @IsArray({ message: 'modifiers must be an array.' })
+  @ArrayMinSize(1, { message: 'modifiers must contain at least 1 item.' })
   @ValidateNested({ each: true })
   @Type(() => CreateModifierOptionDto)
   modifiers!: CreateModifierOptionDto[];

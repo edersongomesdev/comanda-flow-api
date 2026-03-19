@@ -130,7 +130,9 @@ export class MenuItemsService {
     });
 
     if (!menuItem) {
-      throw new NotFoundException('Menu item not found for this tenant.');
+      throw new NotFoundException(
+        `Menu item "${id}" was not found for this tenant.`,
+      );
     }
   }
 
@@ -141,7 +143,9 @@ export class MenuItemsService {
     });
 
     if (!category) {
-      throw new NotFoundException('Category not found for this tenant.');
+      throw new NotFoundException(
+        `Category "${categoryId}" was not found for this tenant.`,
+      );
     }
   }
 
@@ -165,7 +169,9 @@ export class MenuItemsService {
     });
 
     if (!item) {
-      throw new NotFoundException('Menu item not found for this tenant.');
+      throw new NotFoundException(
+        `Menu item "${id}" was not found for this tenant.`,
+      );
     }
 
     return presentMenuItem(item);

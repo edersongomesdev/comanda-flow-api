@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -43,6 +44,21 @@ export class TablesService {
       throw new ForbiddenException(
         `The current plan allows up to ${maxTables} tables.`,
       );
+    }
+
+    const existingTable = await this.prisma.table.findFirst({
+      where: { tenantId, number: dto.number },
+      select: { id: true },
+    });
+
+    if (existingTable) {
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'Conflict',
+        code: 'TABLE_NUMBER_CONFLICT',
+        field: 'number',
+        message: `Table number ${dto.number} is already in use for this tenant.`,
+      });
     }
 
     return this.prisma.table.create({

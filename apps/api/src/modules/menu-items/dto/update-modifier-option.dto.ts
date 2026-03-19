@@ -21,7 +21,9 @@ export class UpdateModifierOptionDto {
   @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
   @IsNotEmpty({ message: 'name should not be empty.' })
-  @MaxLength(120)
+  @MaxLength(120, {
+    message: 'name must be shorter than or equal to 120 characters.',
+  })
   name!: string;
 
   @ApiPropertyOptional({ example: 500, default: 0 })

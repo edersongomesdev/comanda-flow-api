@@ -61,7 +61,9 @@ export class CategoriesService {
     });
 
     if (!category) {
-      throw new NotFoundException('Category not found for this tenant.');
+      throw new NotFoundException(
+        `Category "${id}" was not found for this tenant.`,
+      );
     }
   }
 }

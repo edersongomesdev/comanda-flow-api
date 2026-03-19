@@ -42,6 +42,27 @@ describe('PrismaClientExceptionFilter', () => {
     });
   });
 
+  it('maps tenantId+number unique violations to a table-friendly 409 response', () => {
+    filter.catch(
+      {
+        code: 'P2002',
+        meta: {
+          target: ['tenantId', 'number'],
+        },
+      } as unknown as PrismaClientKnownRequestError,
+      createHost(response as never),
+    );
+
+    expect(response.status).toHaveBeenCalledWith(409);
+    expect(response.json).toHaveBeenCalledWith({
+      statusCode: 409,
+      message: 'Table number is already in use for this tenant.',
+      error: 'Conflict',
+      code: 'TABLE_NUMBER_CONFLICT',
+      field: 'number',
+    });
+  });
+
   it('maps P2025 to a 404 response without throwing', () => {
     filter.catch(
       {
