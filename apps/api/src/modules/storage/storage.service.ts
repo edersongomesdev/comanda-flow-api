@@ -67,10 +67,18 @@ export class StorageService {
     }
 
     return {
-      path,
+      bucket,
+      path: data.path,
+      signedUrl: data.signedUrl,
       uploadUrl: data.signedUrl,
+      uploadMethod: 'PUT',
+      uploadHeaders: {
+        'content-type': dto.contentType,
+        'x-upsert': 'false',
+      },
+      contentType: dto.contentType,
       token: data.token,
-      publicUrl: this.buildPublicUrl(bucket, path),
+      publicUrl: this.buildPublicUrl(bucket, data.path),
     };
   }
 

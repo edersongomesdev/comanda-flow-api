@@ -1,12 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
   Min,
 } from 'class-validator';
+import { trimStringInput } from '../../../common/utils/dto-transforms';
 
 export class UpdateModifierOptionDto {
   @ApiPropertyOptional({ example: 'opt_123' })
@@ -15,7 +18,9 @@ export class UpdateModifierOptionDto {
   id?: string;
 
   @ApiProperty({ example: 'Bacon extra' })
+  @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
+  @IsNotEmpty({ message: 'name should not be empty.' })
   @MaxLength(120)
   name!: string;
 

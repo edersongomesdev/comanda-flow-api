@@ -1,9 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
@@ -11,11 +12,14 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { emptyStringToNull, trimStringInput } from '../../../common/utils/dto-transforms';
 import { CreateModifierGroupDto } from './create-modifier-group.dto';
 
 export class CreateMenuItemDto {
   @ApiProperty({ example: 'x-salada' })
+  @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
+  @IsNotEmpty({ message: 'name should not be empty.' })
   @MaxLength(120)
   name!: string;
 
@@ -30,13 +34,16 @@ export class CreateMenuItemDto {
   priceCents!: number;
 
   @ApiProperty({ example: 'cat_123' })
+  @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
+  @IsNotEmpty({ message: 'categoryId should not be empty.' })
   categoryId!: string;
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/burger.jpg' })
+  @Transform(({ value }: { value: unknown }) => emptyStringToNull(value))
   @IsOptional()
   @IsUrl()
-  imageUrl?: string;
+  imageUrl?: string | null;
 
   @ApiPropertyOptional({ default: false })
   @IsOptional()

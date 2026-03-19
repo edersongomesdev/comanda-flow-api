@@ -1,21 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { trimStringInput } from '../../../common/utils/dto-transforms';
 import { CreateModifierOptionDto } from './create-modifier-option.dto';
 
 export class CreateModifierGroupDto {
   @ApiProperty({ example: 'Adicionais' })
+  @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
+  @IsNotEmpty({ message: 'name should not be empty.' })
   @MaxLength(120)
   name!: string;
 

@@ -1,22 +1,29 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsArray,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
   MaxLength,
 } from 'class-validator';
+import { emptyStringToNull, trimStringInput } from '../../../common/utils/dto-transforms';
 
 export class UpdateTenantDto {
   @ApiPropertyOptional({ example: 'General Burguer' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
+  @IsNotEmpty({ message: 'name should not be empty.' })
   @MaxLength(120)
   name?: string;
 
   @ApiPropertyOptional({ example: 'general-burguer' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => trimStringInput(value))
   @IsString()
+  @IsNotEmpty({ message: 'slug should not be empty.' })
   @MaxLength(120)
   slug?: string;
 
@@ -47,8 +54,9 @@ export class UpdateTenantDto {
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/logo.png' })
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => emptyStringToNull(value))
   @IsUrl()
-  logoUrl?: string;
+  logoUrl?: string | null;
 
   @ApiPropertyOptional({ type: [String], example: ['Centro', 'Jardins'] })
   @IsOptional()

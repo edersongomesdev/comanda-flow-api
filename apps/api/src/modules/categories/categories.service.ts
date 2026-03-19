@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -36,6 +40,17 @@ export class CategoriesService {
 
   async remove(tenantId: string, id: string) {
     await this.ensureOwnership(tenantId, id);
+
+    const linkedMenuItemsCount = await this.prisma.menuItem.count({
+      where: { tenantId, categoryId: id },
+    });
+
+    if (linkedMenuItemsCount > 0) {
+      throw new ConflictException(
+        'Category cannot be deleted while menu items still reference it.',
+      );
+    }
+
     await this.prisma.category.delete({ where: { id } });
   }
 
